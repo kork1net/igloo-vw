@@ -1,0 +1,8 @@
+{
+  "name": "מכנס כחול כהה",
+  "variants": [
+    { "id": "green", "name": "מכנס ירוק", "hue": -100 },
+    { "id": "burgundy", "name": "מכנס בורדו", "hue": 120 },
+    { "id": "purple", "name": "מכנס סגול", "hue": 60 }
+  ]
+}

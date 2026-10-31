@@ -1,0 +1,10 @@
+[
+  { "id": "white", "name": "לבן", "tint": "#ffffff" },
+  { "id": "blue", "name": "תכלת", "tint": "#91ceff" },
+  { "id": "mint", "name": "מנטה", "tint": "#9fe2ba" },
+  { "id": "yellow", "name": "צהוב", "tint": "#ffe490" },
+  { "id": "pink", "name": "ורוד", "tint": "#ffb5d0" },
+  { "id": "orange", "name": "כתום", "tint": "#ffc18c" },
+  { "id": "purple", "name": "סגול", "tint": "#cbb1f2" },
+  { "id": "gray", "name": "אפור", "tint": "#b9c6d3" }
+]

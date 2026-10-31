@@ -1,0 +1,384 @@
+import { showChatMessage, updateChatMessage } from '../objects/ChatBubble';
+import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
+
+import { io } from 'socket.io-client';
+import { SERVER_URL, saveToken } from './Auth';
+import { createAdminBadge } from '../objects/AdminBadge';
+
+class RemotePlayer {
+    constructor(scene, data) {
+        this.scene = scene;
+        this.targetX = data.x ?? 0;
+        this.targetY = data.y ?? 0;
+        this.directionFrame = Number.isFinite(data.direction)
+            ? data.direction
+            : 0;
+        this.facingLeft = Boolean(data.facingLeft);
+        this.isMoving = Boolean(data.isMoving);
+        this.isRunning = Boolean(data.isRunning);
+        this.username = data.username || 'Player';
+        this.gender = data.gender === 'female' ? 'female' : 'male';
+        this.equipped = normalizeEquipment(data.equipped || { shirt: data.shirt });
+        this.walkTimer = 0;
+        this.walkFrame = 0;
+
+        this.container = scene.add.container(this.targetX, this.targetY);
+
+        const shadow = scene.add.ellipse(0, 16, 42, 12, 0x7897a8, 0.35);
+        this.body = scene.add.sprite(0, 24, 'player', this.directionFrame);
+        this.body.setOrigin(0.5, 1);
+
+        this.nameText = scene.add.text(0, 37, this.username, {
+            fontFamily: 'Rubik, Arial, sans-serif',
+            fontStyle: 'bold',
+            fontSize: '17px',
+            color: '#17324d',
+            stroke: '#ffffff',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        this.container.add([shadow, this.body, this.nameText]);
+        this.adminBadge = createAdminBadge(scene, this.container, data.isAdmin);
+        this.clothing = new ClothingLayers(scene, this.container, 0, 24, 1, this.body, this.gender);
+        this.clothing.setEquipment(this.equipped);
+        this.container.setDepth(10);
+        this.container.setSize(80, 150);
+        this.container.setInteractive({ useHandCursor: true });
+        this.container.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            scene.sound.play('wood-tap-ui');
+            scene.openPlayerCard(this);
+        });
+        this.updateAvatar();
+    }
+
+    showMessage(message) {
+        showChatMessage(this, message);
+    }
+
+    setState(data) {
+        this.adminBadge.setVisible(data.isAdmin === true);
+        this.targetX = data.x ?? this.targetX;
+        this.targetY = data.y ?? this.targetY;
+
+        if (data.username) {
+            this.username = data.username;
+            this.nameText.setText(this.username);
+        }
+
+        if (Number.isFinite(data.direction)) {
+            this.directionFrame = data.direction;
+        }
+
+        if (typeof data.facingLeft === 'boolean') {
+            this.facingLeft = data.facingLeft;
+        }
+
+        this.isMoving = Boolean(data.isMoving);
+        this.isRunning = Boolean(data.isRunning);
+        this.equipped = normalizeEquipment(data.equipped || { shirt: data.shirt });
+        this.clothing.setEquipment(this.equipped);
+
+        this.updateAvatar();
+    }
+
+    updateAvatar() {
+        if (!this.isMoving) {
+            this.walkTimer = 0;
+            this.walkFrame = 0;
+            this.body.setTexture('player', this.directionFrame);
+        } else {
+            const textures = ['player-walk-1', 'player-walk-2'];
+            this.body.setTexture(textures[this.walkFrame], this.directionFrame);
+        }
+
+        this.body.setFlipX(this.facingLeft);
+        this.body.x = this.directionFrame === 6 ? (this.facingLeft ? -6 : 6) : 0;
+
+        this.clothing.update(this.directionFrame, this.facingLeft, this.body.x, this.body.texture.key);
+    }
+
+    update(delta) {
+        const dx = this.targetX - this.container.x;
+        const dy = this.targetY - this.container.y;
+
+        // Exponential smoothing has the same response at every render rate.
+        const blend = 1 - Math.exp(-15 * delta / 1000);
+        if (Math.hypot(dx, dy) < 0.1) {
+            this.container.setPosition(this.targetX, this.targetY);
+        } else {
+            this.container.x += dx * blend;
+            this.container.y += dy * blend;
+        }
+
+        if (!this.isMoving) {
+            this.walkTimer = 0;
+            this.walkFrame = 0;
+        } else {
+            const frameDuration = this.isRunning ? 75 : 125;
+            this.walkTimer += delta;
+            while (this.walkTimer >= frameDuration) {
+                this.walkTimer -= frameDuration;
+                this.walkFrame = (this.walkFrame + 1) % 2;
+            }
+        }
+
+        this.updateAvatar();
+        updateChatMessage(this);
+    }
+}
+
+export default class Multiplayer {
+    constructor(scene) {
+        this.scene = scene;
+        this.socket = null;
+        this.remotePlayers = new Map();
+        this.sendElapsed = 0;
+        this.lastSentState = null;
+        this.backgroundControlled = false;
+    }
+
+    sendChatMessage(message) {
+        if (typeof message !== 'string') return;
+        const text = message.trim().slice(0, 100);
+        if (text && this.socket?.connected) {
+            this.socket.emit('chatMessage', text);
+            this.scene.sound.play('ui-chat');
+        }
+    }
+
+    syncLocalProfile() {
+        if (!this.socket?.connected || !this.scene.player) return;
+
+        const inventory = this.scene.registry.get('inventory') || {};
+        const equipped = inventory.equipped || {};
+
+        this.socket.emit('playerProfile', {
+            username: this.scene.player.username,
+            equipped: normalizeEquipment(equipped),
+            shirt: equipped.shirt || null
+        });
+    }
+
+    applyInventory(inventory) {
+        if (!inventory || !Array.isArray(inventory.items) || !inventory.equipped) return;
+        const previous = this.scene.registry.get('inventory');
+        if (JSON.stringify(previous) === JSON.stringify(inventory)) return;
+        this.scene.registry.set('inventory', inventory);
+        if (!this.scene.sys.isActive()) return;
+        this.scene.player?.setEquipment(inventory.equipped);
+        if (this.scene.inventoryWindow) {
+            this.scene.inventoryWindow.destroy();
+            this.scene.inventoryWindow = null;
+            this.scene.openInventory(this.scene.inventoryPage, false);
+        }
+    }
+
+    requestInventory(event, data) {
+        return new Promise((resolve, reject) => {
+            if (!this.socket?.connected) { reject(new Error('אין חיבור לשרת המשחק.')); return; }
+            this.socket.timeout(5000).emit(event, data, (error, result) => {
+                if (error) { reject(new Error('לא התקבלה תשובה מהשרת. נסו שוב.')); return; }
+                if (!result?.ok) { reject(new Error(result?.error || 'הפעולה נכשלה.')); return; }
+                this.applyInventory(result.inventory);
+                resolve(result);
+            });
+        });
+    }
+
+    connect() {
+        this.onVisibilityChange = () => this.syncVisibility();
+        document.addEventListener('visibilitychange', this.onVisibilityChange);
+        this.socket = io(SERVER_URL, {
+            auth: (callback) => callback({
+                token: this.scene.registry.get('auth')?.token,
+                room: this.scene.sys.settings.key,
+                player: this.getLocalState()
+            })
+        });
+
+        this.socket.on('authRequired', () => this.leaveAccount());
+        this.socket.on('inventoryUpdated', inventory => this.applyInventory(inventory));
+        this.socket.on('itemRaritiesUpdated', values => {
+            this.scene.registry.set('itemRarities', values);
+            if (this.scene.sys.isActive() && this.scene.inventoryWindow) {
+                this.scene.inventoryWindow.destroy();
+                this.scene.inventoryWindow = null;
+                this.scene.openInventory(this.scene.inventoryPage, false);
+            }
+        });
+        this.socket.on('inventoryError', message => this.scene.showItemNotice(message));
+
+        this.socket.on('disconnect', () => {
+            for (const player of this.remotePlayers.values()) player.container.destroy();
+            this.remotePlayers.clear();
+            this.lastSentState = null;
+        });
+
+        this.socket.on('connect', () => {
+            console.log('Connected to multiplayer server:', this.socket.id);
+            this.syncLocalProfile();
+            if (document.hidden) this.syncVisibility();
+            else this.backgroundControlled = false;
+        });
+
+        this.socket.on('backgroundState', state => this.applyBackgroundState(state));
+
+        this.socket.on('currentPlayers', (players) => {
+            this.scene.player.setAdmin(players[this.socket.id]?.isAdmin);
+            for (const [id, data] of Object.entries(players)) {
+                if (id !== this.socket.id) {
+                    this.addRemotePlayer(id, data);
+                }
+            }
+        });
+
+        this.socket.on('playerJoined', (data) => {
+            if (data.id !== this.socket.id) {
+                this.addRemotePlayer(data.id, data);
+            }
+        });
+
+        this.socket.on('playerMoved', (data) => {
+            if (!data || !data.id) return;
+            if (data.id === this.socket.id) return;
+
+            if (!this.remotePlayers.has(data.id)) {
+                this.addRemotePlayer(data.id, data);
+            }
+
+            this.remotePlayers.get(data.id)?.setState(data);
+        });
+
+        this.socket.on('chatMessage', (data) => {
+            if (!data || typeof data.message !== 'string' || !data.message.trim()) return;
+            this.remotePlayers.get(data.id)?.showMessage(data.message);
+            this.scene.sound.play('ui-chat');
+        });
+
+        this.socket.on('playerLeft', (id) => {
+            const player = this.remotePlayers.get(id);
+
+            if (player) {
+                player.container.destroy();
+                this.remotePlayers.delete(id);
+            }
+        });
+
+        this.scene.events.once('shutdown', () => {
+            this.disconnect();
+        });
+    }
+
+    addRemotePlayer(id, data) {
+        if (this.remotePlayers.has(id)) {
+            this.remotePlayers.get(id)?.setState(data);
+            return;
+        }
+
+        const player = new RemotePlayer(this.scene, data);
+        this.remotePlayers.set(id, player);
+    }
+
+    getLocalState() {
+        const player = this.scene.player;
+        const inventory = this.scene.registry.get('inventory');
+        return {
+            x: player.container.x,
+            y: player.container.y,
+            username: player.username,
+            equipped: normalizeEquipment(inventory?.equipped),
+            shirt: inventory?.equipped?.shirt || null,
+            direction: player.currentDirectionFrame,
+            facingLeft: player.facingLeft,
+            isMoving: player.isMoving,
+            isRunning: player.isRunning
+        };
+    }
+
+    applyBackgroundState(state) {
+        const player = this.scene.player;
+        player.container.setPosition(state.x, state.y);
+        player.currentDirectionFrame = state.direction;
+        player.facingLeft = state.facingLeft;
+        player.isMoving = state.isMoving;
+        player.isRunning = state.isRunning;
+        if (!state.isMoving) player.moveTarget = null;
+        player.updateAnimation(0, state.isMoving);
+    }
+
+    syncVisibility() {
+        if (!this.socket?.connected) return;
+        const player = this.scene.player;
+        if (document.hidden) {
+            // Released keys can be missed after switching tabs. Keep click destinations.
+            Object.values(player.cursors)
+                .forEach(key => key.reset());
+            if (player.moveTarget) {
+                player.updateDirection(player.moveTarget.x - player.container.x,
+                    player.moveTarget.y - player.container.y);
+            }
+            this.backgroundControlled = true;
+            this.socket.emit('playerBackground', {
+                hidden: true,
+                state: this.getLocalState(),
+                target: player.moveTarget
+            });
+        } else if (this.backgroundControlled) {
+            // Wait for the final server position before resuming local simulation.
+            this.socket.emit('playerBackground', { hidden: false }, state => {
+                this.applyBackgroundState(state);
+                this.lastSentState = null;
+                this.backgroundControlled = false;
+                // Visibility may have changed again while waiting for the response.
+                if (document.hidden) this.syncVisibility();
+            });
+        }
+    }
+
+    update(delta) {
+        for (const remotePlayer of this.remotePlayers.values()) {
+            remotePlayer.update(delta);
+        }
+        if (!this.socket?.connected || !this.scene.player || this.backgroundControlled) return;
+
+        this.sendElapsed += delta;
+        const state = this.getLocalState();
+        const previous = this.lastSentState;
+        // Send starts, stops, turns and clothing changes immediately; positions at 20 Hz.
+        const changed = !previous || ['username', 'shirt', 'direction', 'facingLeft',
+            'isMoving', 'isRunning'].some(key => state[key] !== previous[key]);
+        const clothingChanged = !previous || JSON.stringify(state.equipped) !== JSON.stringify(previous.equipped);
+        const moved = !previous || state.x !== previous.x || state.y !== previous.y;
+        if (changed || clothingChanged || (moved && this.sendElapsed >= 50)) {
+            this.socket.emit('playerMove', state);
+            this.lastSentState = state;
+            this.sendElapsed = 0;
+        }
+    }
+
+    disconnect() {
+        document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        this.socket?.disconnect();
+        this.socket = null;
+
+        for (const player of this.remotePlayers.values()) {
+            player.container.destroy();
+        }
+
+        this.remotePlayers.clear();
+    }
+
+    leaveAccount() {
+        saveToken(null);
+        this.scene.registry.remove('auth');
+        this.scene.registry.remove('inventory');
+        this.scene.scene.start('MainMenu');
+    }
+
+    logout() {
+        if (this.socket?.connected) {
+            this.socket.timeout(2000).emit('auth:logout', () => this.leaveAccount());
+        } else this.leaveAccount();
+    }
+}
