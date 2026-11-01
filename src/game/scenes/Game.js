@@ -1,6 +1,6 @@
 import { addHoverOutline } from '../ui/HoverOutline';
 import square from '../../../shared/square.json';
-import { getShopColliders } from '../../../shared/collision';
+import { getSquareColliders } from '../../../shared/collision';
 import { createSnowGameEntry } from '../minigames/SnowCatch';
 import { createSnow } from '../ui/Snow';
 import { BaseRoom } from '../rooms/BaseRoom';
@@ -17,8 +17,11 @@ export class Game extends BaseRoom {
         super.preload();
         this.load.image('igloo-square', 'assets/enviroment/igloo-square.png');
         this.load.image('square-fountain', 'assets/enviroment/fountaint.png');
+        this.load.image('snow-game-snowman', 'assets/enviroment/snowman.png');
         this.load.image('shop-building', 'assets/enviroment/shop-building1.png');
         this.load.image('shop-building-door', 'assets/enviroment/shop-building-door.png');
+        this.load.image('coffee-building', 'assets/enviroment/coffee-building.png');
+        this.load.image('coffee-building-door', 'assets/enviroment/coffee-building-door.png');
         for (const resident of residents.filter(resident => resident.room === 'Game')) {
             if (!this.textures.exists(resident.texture)) this.load.image(resident.texture, resident.image);
         }
@@ -50,11 +53,6 @@ export class Game extends BaseRoom {
         this.add.image(width / 2, height / 2, 'igloo-square')
             .setDisplaySize(width, height).setDepth(-1);
         this.createSnow();
-        this.add.rectangle(width / 2, height / 2, width - 4, height - 4)
-            .setFillStyle()
-            .setStrokeStyle(4, 0x9bc5df)
-            .setScrollFactor(0)
-            .setDepth(90);
 
         // Buildings
         this.shopBuilding = this.add.image(width * square.shop.xRatio, square.shop.y, 'shop-building')
@@ -67,12 +65,24 @@ export class Game extends BaseRoom {
         setWorldDepth(this.shopBuilding, this.shopDepthLine, height);
         setWorldDepth(this.shopEntrance, this.shopDepthLine, height);
         this.shopDoorOutline = addHoverOutline(this, this.shopEntrance);
-        this.createBuilding(width * 0.75, 180, 0x8fc9ff, 'CAFE');
+        this.cafeBuilding = this.add.image(width * square.cafe.xRatio, square.cafe.y, 'coffee-building')
+            .setOrigin(0.5, 1).setScale(square.cafe.scale);
+        this.cafeEntrance = this.add.image(this.cafeBuilding.x, this.cafeBuilding.y, 'coffee-building-door')
+            .setOrigin(0.5, 1).setScale(this.cafeBuilding.scaleX)
+            .setInteractive({ pixelPerfect: true, alphaTolerance: 1, useHandCursor: true });
+        this.cafeDepthLine = this.cafeBuilding.y - this.cafeBuilding.displayHeight * (1 - square.cafe.depthRatio);
+        setWorldDepth(this.cafeBuilding, this.cafeDepthLine, height);
+        setWorldDepth(this.cafeEntrance, this.cafeDepthLine, height);
+        this.cafeDoorOutline = addHoverOutline(this, this.cafeEntrance);
+        this.cafeEntrancePoint = {
+            x: this.cafeBuilding.x + (square.cafe.doorCenter - this.cafeBuilding.width / 2) * square.cafe.scale,
+            y: this.cafeBuilding.y + (square.cafe.doorBottom - this.cafeBuilding.height) * square.cafe.scale + 12
+        };
 
         this.fountain = this.add.image(width * 0.41, height * 0.74, 'square-fountain')
-            .setOrigin(0.5, 1).setScale(1);
-        this.add.ellipse(this.fountain.x, this.fountain.y - 24,
-            this.fountain.displayWidth * 1.1, 58, 0x536b7d, 0.22).setDepth(0);
+            .setOrigin(0.5, 1).setScale(0.8);
+        this.add.ellipse(this.fountain.x, this.fountain.y - 24 * this.fountain.scaleY,
+            this.fountain.displayWidth * 1.1, 58 * this.fountain.scaleY, 0x536b7d, 0.22).setDepth(0);
         // Sorting line: 75% of the way down the fountain image.
         this.fountainDepthLine = this.fountain.y - this.fountain.displayHeight * 0.25;
         setWorldDepth(this.fountain, this.fountainDepthLine, height);
@@ -83,20 +93,26 @@ export class Game extends BaseRoom {
             y: this.shopBuilding.y + 12
         };
 
-        this.colliders = getShopColliders({ ...square, width });
+        this.colliders = getSquareColliders({ ...square, width });
 
         // Returning shoppers appear just outside the door.
-        this.createPlayer(
-            data.fromRoom === 'Shop' ? this.shopEntrancePoint.x : width * 0.58,
-            data.fromRoom === 'Shop' ? this.shopBuilding.y + 12 : height / 2,
-            'Player1'
-        );
+        const returningEntrance = data.fromRoom === 'Shop' ? this.shopEntrancePoint
+            : data.fromRoom === 'Cafe' ? this.cafeEntrancePoint : null;
+        this.createPlayer(returningEntrance?.x ?? width * 0.58,
+            returningEntrance?.y ?? height / 2, 'Player1');
         this.residents = new Map(residents.filter(resident => resident.room === 'Game')
             .map(definition => [definition.id, new Resident(this, definition)]));
         this.snowGameEntry = createSnowGameEntry(this);
 
         // Shop entrance
         this.lastShopClickTime = -Infinity;
+        this.lastCafeClickTime = -Infinity;
+        this.cafeEntrance.on('pointerdown', () => {
+            const now = this.time.now;
+            const doubleClick = now - this.lastCafeClickTime <= 300;
+            this.lastCafeClickTime = doubleClick ? -Infinity : now;
+            this.moveToRoom('Cafe', this.cafeEntrancePoint.x, this.cafeEntrancePoint.y, doubleClick);
+        });
 
         this.shopEntrance.on('pointerdown', () => {
             console.log('SHOP DOOR CLICKED');
@@ -117,14 +133,6 @@ export class Game extends BaseRoom {
             );
         });
 
-        this.add.text(
-            width / 2, height - 22,
-            'Move with the mouse or arrow keys', {
-                fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
-                fontSize: '16px',
-                color: '#34566e'
-            }
-        ).setOrigin(0.5);
         
     }
 

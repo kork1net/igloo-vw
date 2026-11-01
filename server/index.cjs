@@ -4,9 +4,9 @@ const { Server } = require('socket.io');
 const { buildCatalog } = require('../scripts/item-catalog.cjs');
 const { Accounts, handleAccountSocket } = require('./accounts.cjs');
 const accounts = new Accounts(process.env.VW_ACCOUNTS_FILE);
-const { getShopColliders, resolveMovement } = require('../shared/collision.js');
+const { getSquareColliders, resolveMovement } = require('../shared/collision.js');
 const square = require('../shared/square.json');
-const squareColliders = getShopColliders(square);
+const squareColliders = getSquareColliders(square);
 const { SnowGames } = require('./snow-game.cjs');
 const snowGames = new SnowGames();
 const { Rarities } = require('./rarities.cjs');
@@ -37,6 +37,13 @@ const io = new Server(port, {
 
 const players = new Map();
 const adminItemSets = new Map();
+const { Trades } = require('./trades.cjs');
+const trades = new Trades({ inventory: inventories, getCatalog, getPlayer: id => players.get(id),
+    findUser: name => accounts.findUser(name), send: (id, event, data) => io.to(id).emit(event, data),
+    updateInventory: pushInventory });
+const tradeTimer = setInterval(() => trades.expire(), 1000);
+tradeTimer?.unref?.();
+io.httpServer?.once('close', () => clearInterval(tradeTimer));
 
 function pushInventory(user) {
     const inventory = inventories.snapshot(user, getCatalog());
@@ -76,7 +83,7 @@ io.on('connection', (socket) => {
     });
     console.log('Player connected:', socket.id);
 
-    const room = socket.handshake.auth?.room === 'Shop' ? 'Shop' : 'Game';
+    const room = ['Shop', 'Cafe'].includes(socket.handshake.auth?.room) ? socket.handshake.auth.room : 'Game';
     socket.join(room);
     socket.join(`user:${user.id}`);
     const initial = socket.handshake.auth?.player || {};
@@ -114,6 +121,7 @@ io.on('connection', (socket) => {
         const player = players.get(socket.id);
         if (!player || player.minigame === game) return;
         player.minigame = game;
+        if (game) trades.cancelForUser(user.id);
         io.to(room).emit('playerMoved', { ...player });
     };
     socket.on('minigame:presence', (request, reply) => {
@@ -189,6 +197,7 @@ io.on('connection', (socket) => {
                     const values = rarities.set(request?.itemId, request?.rarity, catalog);
                     io.to('Game').emit('itemRaritiesUpdated', values);
                     io.to('Shop').emit('itemRaritiesUpdated', values);
+                    io.to('Cafe').emit('itemRaritiesUpdated', values);
                     reply({ ok: true, rarities: values });
                 } else {
                     const values = rarities.snapshot();
@@ -203,6 +212,65 @@ io.on('connection', (socket) => {
     }
     if (user.isAdmin) adminItemSets.set(user.id, inventory.items.join('|'));
 
+    for (const action of ['request', 'respond', 'offer', 'confirm', 'cancel']) {
+        socket.on(`trade:${action}`, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            try {
+                let id;
+                if (action === 'request') id = trades.request(socket.id, request?.targetId);
+                else if (action === 'cancel') trades.cancel(socket.id, request?.id);
+                else trades[action](socket.id, request);
+                reply({ ok: true, ...(id ? { id } : {}) });
+            } catch (error) {
+                reply({ ok: false, error: error instanceof InventoryError ? error.message : 'לא ניתן לשמור את ההחלפה. הפריטים לא הועברו. נסו שוב.' });
+            }
+        });
+    }
+
+    socket.on('admin:resetPlayer', (request, reply) => {
+        if (typeof reply !== 'function') return;
+        const manager = accounts.authenticate(token);
+        if (!manager?.isAdmin) { reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return; }
+        try {
+            const recipient = accounts.findUser(request?.username);
+            if (!recipient) throw new InventoryError('לא נמצא שחקן בשם הזה.');
+            const result = inventories.resetPlayer(recipient, manager, request, getCatalog());
+            if (result.reset) {
+                trades.cancelForUser(recipient.id);
+                accounts.revokeUserSessions(recipient.id);
+            }
+            reply({ ok: true, username: recipient.username });
+            if (result.reset) {
+                io.to(`user:${recipient.id}`).emit('accountReset');
+                io.in(`user:${recipient.id}`).disconnectSockets(true);
+            }
+        } catch (error) {
+            reply({ ok: false, error: error instanceof InventoryError ? error.message : 'לא ניתן לשמור את האיפוס. נסו שוב.' });
+        }
+    });
+
+    socket.on('admin:grant', (request, reply) => {
+        if (typeof reply !== 'function') return;
+        if (!user.isAdmin) { reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return; }
+        try {
+            if (request?.scope === 'room') {
+                const recipients = [...players.values()].filter(player => player.room === room)
+                    .map(player => accounts.findUser(player.username)).filter(Boolean);
+                const recipientCount = inventories.grantRoom(user, room, request, recipients, recipient => pushInventory(recipient));
+                reply({ ok: true, scope: 'room', recipientCount });
+                return;
+            }
+            if (request?.scope && request.scope !== 'player') throw new InventoryError('בחרו למי לשלוח את המתנה.');
+            const recipient = accounts.findUser(request?.username);
+            if (!recipient) throw new InventoryError('לא נמצא שחקן בשם הזה.');
+            const gift = inventories.grant(recipient, user, request);
+            pushInventory(recipient);
+            reply({ ok: true, gift, username: recipient.username });
+        } catch (error) {
+            reply({ ok: false, error: error instanceof InventoryError ? error.message : 'לא ניתן לשמור את המתנה. נסו שוב.' });
+        }
+    });
+
     const inventoryAction = (action, acknowledge) => {
         if (typeof acknowledge !== 'function') return;
         try {
@@ -214,6 +282,9 @@ io.on('connection', (socket) => {
                 ? error.message : 'לא ניתן לשמור את השינוי. נסו שוב.' });
         }
     };
+    socket.on('admin:ackGift', (request, reply) => inventoryAction(
+        () => inventories.acknowledgeGift(user, request?.id, request?.senderId), reply));
+
     for (const action of ['quest:accept', 'quest:claim']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
@@ -372,6 +443,7 @@ io.on('connection', (socket) => {
     }, 50);
 
     socket.on('disconnect', () => {
+        trades.cancelForSocket(socket.id);
         clearInterval(backgroundTimer);
         players.delete(socket.id);
         if (![...players.values()].some(player => player.userId === user.id)) adminItemSets.delete(user.id);
@@ -381,6 +453,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('auth:logout', (acknowledge) => {
+        trades.cancelForSocket(socket.id);
         accounts.logout(token);
         if (typeof acknowledge === 'function') acknowledge();
         else socket.disconnect(true);

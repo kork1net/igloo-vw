@@ -101,6 +101,18 @@ class Accounts {
     }
 
     logout(token) { this.sessions.delete(token); }
+
+    revokeUserSessions(userId) {
+        for (const [token, session] of this.sessions) {
+            if (session.user.id === userId) this.sessions.delete(token);
+        }
+    }
+
+    findUser(username) {
+        if (typeof username !== 'string') return null;
+        const user = this.users.get(username.normalize('NFKC').trim().toLowerCase());
+        return user ? publicUser(user) : null;
+    }
 }
 
 function handleAccountSocket(socket, accounts, inventoryForUser = () => undefined) {

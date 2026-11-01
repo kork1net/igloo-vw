@@ -6,5 +6,6 @@
   { "id": "pink", "name": "ורוד", "tint": "#ffb5d0" },
   { "id": "orange", "name": "כתום", "tint": "#ffc18c" },
   { "id": "purple", "name": "סגול", "tint": "#cbb1f2" },
-  { "id": "gray", "name": "אפור", "tint": "#b9c6d3" }
+  { "id": "gray", "name": "אפור", "tint": "#b9c6d3" },
+  { "id": "skin", "name": "צבע גוף", "tint": "#f1c5a5" }
 ]

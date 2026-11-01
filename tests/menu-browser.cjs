@@ -333,6 +333,66 @@ browser.on('error', error => { launchError = error; });
         console.log('PASS browser: default C frames, admin rarity manager, saving S, live frame update and window cleanup');
         await evaluate(`(async () => {
             const scene = window.inventoryTestScene;
+            const saved = scene.registry.get('itemRarities');
+            const ids = scene.inventoryWindow.list.filter(child => child.getData('itemId')).slice(0, 4).map(child => child.getData('itemId'));
+            if (ids.length !== 4) throw Error('Rarity effect fixtures missing');
+            const grades = ['C', 'B', 'A', 'S'];
+            scene.registry.set('itemRarities', { ...saved, ...Object.fromEntries(ids.map((id, i) => [id, grades[i]])) });
+            scene.inventoryWindow.destroy(); scene.openInventory(0, false);
+            const animated = [];
+            for (let i = 0; i < 4; i++) {
+                const effect = scene.inventoryWindow.list.find(child => child.getData('rarityItemId') === ids[i]);
+                if (i === 0 ? !!effect : effect?.list.length !== 1 + i * 2) throw Error('Rarity effect strength/star count mismatch: ' + grades[i]);
+                if (effect) animated.push(...effect.list);
+            }
+            scene.inventoryWindow.destroy();
+            if (scene.tweens.getTweensOf(animated).some(tween => tween.isPlaying())) throw Error('Rarity tweens survived inventory destruction');
+            scene.registry.set('itemRarities', saved); scene.openInventory(0, false);
+            const { applyHtmlRarityEffect } = await import('/src/game/ui/ItemRarityEffect.js');
+            const preview = document.createElement('button'); preview.className = 'trade-slot trade-item';
+            document.body.append(preview);
+            try {
+                for (const grade of grades) {
+                    applyHtmlRarityEffect(preview, grade);
+                    if (preview.classList.contains('item-rarity-effect') !== (grade !== 'C')) throw Error('HTML rarity effect mismatch');
+                    if (grade !== 'C' && getComputedStyle(preview, '::after').animationName !== 'item-rarity-pulse') throw Error('HTML rarity animation missing');
+                }
+                applyHtmlRarityEffect(preview, 'C');
+                if (preview.classList.contains('item-rarity-effect')) throw Error('HTML rarity effect not cleared');
+            } finally { preview.remove(); }
+        })()`);
+        console.log('PASS browser: C has no effect, B/A/S increase sparkle counts, HTML rarity animation and tween cleanup');
+        await evaluate(`(async () => {
+            const scene = window.inventoryTestScene;
+            if (!scene.inventoryWindow.list.some(child => child.text === 'איפוס שחקן')) throw Error('Admin reset control missing');
+            const { requestAccount } = await import('/src/game/network/Auth.js');
+            const credentials = { username: 'ResetUITarget', password: 'reset-ui-password-123' };
+            await requestAccount('register', { ...credentials, starterColor: 'body-color/blue', gender: 'female' });
+            await scene.multiplayer.requestInventory('admin:grant', { username: credentials.username, id: 'reset-ui-gift-001', kind: 'both', amount: 100, rankingAmount: 200 });
+            const { openAdminReset } = await import('/src/game/ui/AdminReset.js');
+            openAdminReset(scene);
+            const modal = scene.adminModal, form = modal.querySelector('form');
+            if (scene.input.enabled || scene.chatInput.visible) throw Error('Reset modal did not block world input');
+            form.elements.username.value = credentials.username;
+            form.requestSubmit();
+            if (form.querySelector('.admin-reset-confirm').hidden || !form.elements.username.readOnly) throw Error('Reset confirmation step missing');
+            form.elements.confirmation.value = 'WrongPlayer'; form.requestSubmit();
+            if (!modal.querySelector('[role="status"]').textContent.includes('אינו תואם')) throw Error('Wrong reset name accepted');
+            const before = await requestAccount('login', credentials);
+            if (before.inventory.rankingPoints !== 200) throw Error('Reset happened before confirmation');
+            form.elements.confirmation.value = credentials.username; form.requestSubmit();
+            for (let i = 0; i < 100 && !modal.querySelector('[role="status"]').textContent.includes('בהצלחה'); i++) await new Promise(resolve => setTimeout(resolve, 20));
+            if (!modal.querySelector('[role="status"]').textContent.includes('בהצלחה')) throw Error('Reset UI failed');
+            const after = await requestAccount('login', credentials);
+            if (after.inventory.rankingPoints !== 0 || after.inventory.items.join() !== 'body-color/blue') throw Error('Reset UI did not clear target');
+            if (after.user.gender !== 'female') throw Error('Reset changed account identity');
+            modal.querySelector('.resident-close').click();
+            await new Promise(resolve => setTimeout(resolve, 400));
+            if (scene.adminModal || !scene.input.enabled || !scene.chatInput.visible) throw Error('Reset modal did not restore world input');
+        })()`);
+        console.log('PASS browser: admin reset control, two-step named confirmation, rejected mismatch, offline reset and modal input cleanup');
+        await evaluate(`(async () => {
+            const scene = window.inventoryTestScene;
             await scene.toggleItem('accessory/golden-necklace');
             await scene.toggleItem('accessory/black-sun-glasses');
             const equipped = scene.registry.get('inventory').equipped;
@@ -346,7 +406,9 @@ browser.on('error', error => { launchError = error; });
         if (process.argv.includes('--world')) {
             await evaluate(`(async () => {
                 const { Game } = await import('/src/game/scenes/Game.js');
+                const { Cafe } = await import('/src/game/scenes/Cafe.js');
                 const scene = window.inventoryTestScene;
+                scene.scene.add('Cafe', Cafe, false);
                 scene.scene.add('Game', Game, false);
                 scene.scene.start('Game', { fromRoom: 'MainMenu' });
             })()`);
@@ -601,6 +663,255 @@ browser.on('error', error => { launchError = error; });
         await sleep(100);
     }
     if (await evaluate('!!document.querySelector(".quest-rewards-screen")')) await sleep(900);
+    if (process.argv.includes('--trade')) {
+        await evaluate(`(async () => {
+            const { requestAccount, SERVER_URL } = await import('/src/game/network/Auth.js');
+            const { io } = await import('/node_modules/.vite/deps/socket__io-client.js');
+            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const until = async test => { for (let i = 0; i < 100; i++) { if (test()) return; await wait(50); } throw Error('Trade UI timed out'); };
+            const rpc = (socket, event, data) => new Promise((resolve, reject) => socket.timeout(4000).emit(event, data, (error, reply) => error || !reply?.ok ? reject(Error(reply?.error || 'Trade RPC timeout')) : resolve(reply)));
+            const owned = async (username, itemId, copies = 1, extra = []) => {
+                const auth = await requestAccount('register', { username, password: 'test-password-123', gender: 'female' });
+                const shop = io(SERVER_URL, { auth: { token: auth.token, room: 'Shop' } });
+                await until(() => shop.connected);
+                for (const id of [...Array(copies).fill(itemId), ...extra]) await rpc(shop, 'shop:purchase', { itemId: id });
+                const result = await rpc(shop, 'inventory:equip', { itemId, equip: true });
+                shop.disconnect(); return { ...auth, inventory: result.inventory };
+            };
+            const a = await owned('TradeAlice', 'shirt/red-shirt', 2);
+            const b = await owned('TradeBob', 'shoes/gray-shoes', 1, ['shirt/red-shirt']);
+            let scene = window.inventoryTestGame.scene.getScene('Game');
+            scene.openInventory();
+            if (!scene.inventoryWindow.list.some(object => object.getData?.('itemQuantityId') && object.text === '∞')) throw Error('Admin quantities must show infinity');
+            scene.toggleInventory(); await wait(350);
+            const adminPeer = io(SERVER_URL, { auth: { token: b.token, room: 'Game', player: { x: 900, y: 500 } } });
+            let adminPeerState;
+            adminPeer.on('trade:state', state => { adminPeerState = state; });
+            try {
+                await until(() => adminPeer.connected && scene.multiplayer.remotePlayers.has(adminPeer.id));
+                const inviteAdmin = async () => {
+                    const reply = await scene.multiplayer.requestInventory('trade:request', { targetId: adminPeer.id });
+                    await until(() => adminPeerState?.id === reply.id);
+                    await rpc(adminPeer, 'trade:respond', { id: reply.id, accept: true });
+                    await until(() => scene.tradeWindow?.state.phase === 'active');
+                };
+                await inviteAdmin();
+                const { clothingItems } = await import('/src/game/items/Clothing.js');
+                const allAdminItems = () => document.querySelectorAll('.trade-inventory .trade-item').length;
+                if (allAdminItems() !== clothingItems.length) throw Error('Admin trade inventory must show every item');
+                for (let copy = 1; copy <= 6; copy++) {
+                    await until(() => !document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').disabled);
+                    document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').click();
+                    await until(() => adminPeerState.players[1 - adminPeerState.me].offer.length === copy);
+                    if (allAdminItems() !== clothingItems.length || document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"] .trade-quantity')?.textContent !== '∞') throw Error('Offering admin copies hid an item or changed infinity');
+                }
+                await rpc(adminPeer, 'trade:confirm', { id: adminPeerState.id, revision: adminPeerState.revision, accept: true });
+                await wait(100); document.querySelector('[data-quest-action=trade-confirm]').click();
+                await until(() => !scene.tradeModal);
+                await inviteAdmin();
+                if (allAdminItems() !== clothingItems.length || !document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]')) throw Error('Giving items removed them from next admin trade');
+                document.querySelector('.trade-screen .resident-close').click(); await until(() => !scene.tradeModal);
+            } finally { adminPeer.disconnect(); }
+            const previousSocketId = scene.multiplayer.socket.id;
+            scene.registry.set('auth', a); scene.registry.set('inventory', a.inventory); scene.scene.restart();
+            await until(() => window.inventoryTestGame.scene.isActive('Game')
+                && window.inventoryTestGame.scene.getScene('Game').player?.username === a.user.username
+                && window.inventoryTestGame.scene.getScene('Game').multiplayer?.socket.connected
+                && window.inventoryTestGame.scene.getScene('Game').multiplayer.socket.id !== previousSocketId);
+            await until(() => !document.querySelector('.loading-screen'));
+            scene = window.inventoryTestGame.scene.getScene('Game');
+            const peer = io(SERVER_URL, { auth: { token: b.token, room: 'Game', player: { x: 900, y: 500 } } });
+            let peerState, completed;
+            peer.on('trade:state', state => { peerState = state; });
+            peer.on('trade:closed', result => { completed = result; });
+            try {
+                await until(() => peer.connected && scene.multiplayer.remotePlayers.has(peer.id));
+                const invite = async () => {
+                    scene.openPlayerCard(scene.multiplayer.remotePlayers.get(peer.id));
+                    await wait(450);
+                    const button = scene.playerCard.panel.list.find(object => object.getData?.('tradeRequest'));
+                    button.emit('pointerdown', null, 0, 0, { stopPropagation() {} });
+                    await until(() => scene.tradeWindow?.state.phase === 'pending' && peerState?.id === scene.tradeWindow.state.id);
+                    if (scene.tradeModal || !scene.input.enabled || !scene.input.keyboard.enabled) throw Error('Pending trade blocked game input');
+                    const request = document.querySelector('.trade-request-screen');
+                    if (!request || getComputedStyle(request).pointerEvents !== 'none' || request.querySelector('.trade-request-hint')) throw Error('Pending trade must be a nonblocking corner card without the old hint');
+                    const rect = scene.game.canvas.getBoundingClientRect();
+                    const hit = document.elementFromPoint(rect.left + rect.width * 0.65, rect.top + rect.height * 0.65);
+                    if (hit !== scene.game.canvas) throw Error('Pending request intercepted map clicks: ' + hit?.outerHTML.slice(0, 300));
+                    const beforeX = scene.player.container.x;
+                    scene.input.emit('pointerdown', { worldX: beforeX + 20, worldY: scene.player.container.y }, []);
+                    scene.updateRoom(80);
+                    if (scene.player.container.x === beforeX) throw Error('Player could not move while trade request was pending');
+                    scene.moveToRoom('Shop', scene.shopEntrancePoint.x, scene.shopEntrancePoint.y);
+                    if (scene.pendingTransition?.sceneKey !== 'Shop') throw Error('Pending request blocked environment interactions');
+                    scene.pendingTransition = null; scene.player.moveTarget = null;
+                };
+                await invite();
+                await rpc(peer, 'trade:respond', { id: peerState.id, accept: false });
+                await until(() => !scene.tradeModal);
+                peerState = null;
+                await invite();
+                await rpc(peer, 'trade:respond', { id: peerState.id, accept: true });
+                await until(() => scene.tradeWindow?.state.phase === 'active');
+                if (scene.input.enabled || document.querySelectorAll('.trade-avatar').length !== 2) throw Error('Trade window did not show both avatars or block input');
+                document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').click();
+                await until(() => peerState.players[1 - peerState.me].offer.includes('shirt/red-shirt'));
+                await until(() => document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]')
+                    && !document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').disabled);
+                if (document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"] .trade-quantity')) throw Error('Single-copy badge must be hidden');
+                document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').click();
+                await until(() => peerState.players[1 - peerState.me].offer.length === 2);
+                if (document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]')) throw Error('Exhausted item still available');
+                await rpc(peer, 'trade:offer', { id: peerState.id, revision: peerState.revision, items: ['shoes/gray-shoes'] });
+                await until(() => document.querySelector('.trade-offer[data-side=other] [data-item-id="shoes/gray-shoes"]'));
+                await rpc(peer, 'trade:confirm', { id: peerState.id, revision: peerState.revision, accept: true });
+                document.querySelector('.trade-offer[data-side=own] [data-item-id="shirt/red-shirt"]').click();
+                await until(() => peerState.players.every(player => !player.ready));
+                document.querySelector('.trade-inventory [data-item-id="shirt/red-shirt"]').click();
+                await until(() => peerState.players[1 - peerState.me].offer.length === 2);
+                await rpc(peer, 'trade:confirm', { id: peerState.id, revision: peerState.revision, accept: true });
+                await wait(100);
+                document.querySelector('[data-quest-action=trade-confirm]').click();
+                await until(() => completed?.completed && !scene.tradeModal);
+                const final = scene.registry.get('inventory');
+                if (!final.items.includes('shoes/gray-shoes') || final.items.includes('shirt/red-shirt') || final.equipped.shirt) throw Error('Local inventory did not exchange/unequip');
+                const peerLogin = await requestAccount('login', { username: 'TradeBob', password: 'test-password-123' });
+                if (!peerLogin.inventory.items.includes('shirt/red-shirt') || peerLogin.inventory.items.includes('shoes/gray-shoes')) throw Error('Peer inventory did not persist exchange');
+                if (peerLogin.inventory.quantities['shirt/red-shirt'] !== 9) throw Error('Recipient did not keep its original copy plus six admin copies and both received copies');
+                scene.inventoryCategory = 'shoes'; scene.openInventory();
+                const quantity = scene.inventoryWindow.list.find(object => object.getData?.('itemQuantityId') === 'shoes/gray-shoes');
+                if (quantity) throw Error('Single-copy inventory label must be hidden');
+            } finally { peer.disconnect(); }
+        })()`);
+        console.log('PASS browser: complete admin trade inventory after gifting six copies, persistent infinity, hidden single counts, ordinary multi-copy exchange and persisted quantities');
+    }
+    if (process.argv.includes('--hair')) {
+        await evaluate(`(async () => {
+            const scene = window.inventoryTestGame.scene.getScenes(true)[0];
+            const { getClothingItem, getClothingTexture } = await import('/src/game/items/Clothing.js');
+            await scene.openShopCatalog();
+            const hair = scene.catalogItems.filter(item => getClothingItem(item.id).slot === 'hair');
+            if (hair.length !== 6) throw Error('Shop must contain exactly the six requested hairstyles');
+            scene.inventoryCategory = 'hair'; scene.inventoryWindow.destroy(); scene.openInventory();
+            for (const base of ['eye-cover-girl-hair', 'short-hair']) {
+                for (const [suffix, expected] of [['', 0x7d534c], ['--blonde', 0xe5c36c], ['--black', 0x303541]]) {
+                    const item = getClothingItem('hair/' + base + suffix);
+                    if (!hair.some(entry => entry.id === item.id)) throw Error('Hair variant missing from shop');
+                    const key = getClothingTexture(scene, item);
+                    if (getClothingTexture(scene, item) !== key) throw Error('Palette texture did not cache');
+                    const source = scene.textures.get(key).getSourceImage();
+                    const canvas = document.createElement('canvas'); canvas.width = source.width; canvas.height = source.height;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(source, 0, 0);
+                    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    let found = false;
+                    for (let i = 0; i < data.length; i += 4) if (data[i + 3] && ((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]) === expected) found = true;
+                    if (!found) throw Error('Hair variant did not render its expected color: ' + item.id);
+                    await scene.toggleItem(item.id);
+                    if (scene.player.clothing.equipped.hair !== item.id) throw Error('Hair variant did not equip');
+                }
+            }
+        })()`);
+        console.log('PASS browser: six shop hairstyles, original/blonde/black pixels, texture cache and equipping');
+    }
+    if (process.argv.includes('--grants')) {
+        await evaluate(`(async () => {
+            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const scene = window.inventoryTestGame.scene.getScene('Game');
+            const { openAdminGrants } = await import('/src/game/ui/AdminGrants.js');
+            const initial = scene.registry.get('inventory');
+            scene.openInventory();
+            await wait(450);
+            if (!scene.inventoryWindow.list.some(object => object.text === 'מתנות לשחקנים')) throw Error('Admin grant entry missing');
+            const give = async (kind, amount, asset, rankingAmount, room = false) => {
+                openAdminGrants(scene);
+                const form = document.querySelector('.admin-grant-form');
+                if (!form || scene.input.enabled) throw Error('Admin form did not lock world input');
+                form.elements.username.value = 'Koko';
+                form.elements.kind.value = kind;
+                form.elements.kind.dispatchEvent(new Event('change', { bubbles: true }));
+                if (room) {
+                    form.elements.scope.value = 'room';
+                    form.elements.scope.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (!form.elements.username.disabled) throw Error('Room grant still requires a username');
+                }
+                form.elements.amount.value = amount;
+                if (rankingAmount) form.elements.rankingAmount.value = rankingAmount;
+                form.requestSubmit();
+                for (let i = 0; i < 80; i++) {
+                    if (document.querySelector('.admin-grant-status')?.textContent.includes('המתנה נשלחה')) break;
+                    await wait(50);
+                }
+                if (!document.querySelector('.admin-grant-status')?.textContent.includes('המתנה נשלחה')) throw Error('Admin grant failed');
+                document.querySelector('.admin-grant-screen .resident-close').click();
+                for (let i = 0; i < 80 && !document.querySelector('.admin-gift-notification'); i++) await wait(50);
+                const notice = document.querySelector('.admin-gift-notification');
+                if (!notice || !notice.querySelector('h2').textContent.includes('Koko')) throw Error('Sender notice missing');
+                if (notice.querySelector('.admin-gift-amount strong').textContent !== String(amount)) throw Error('Incorrect gift amount');
+                if (!notice.querySelector('.admin-gift-amount img').src.endsWith(asset)) throw Error('Incorrect reward icon');
+                if (rankingAmount) {
+                    const rewards = notice.querySelectorAll('.admin-gift-amount');
+                    if (rewards.length !== 2 || rewards[1].querySelector('strong').textContent !== String(rankingAmount)
+                        || !rewards[1].querySelector('img').src.endsWith('levelup-symbol.png')) throw Error('Combined gift notification missing ranking reward');
+                }
+                if (scene.input.enabled) throw Error('Gift notification allowed world interactions');
+                notice.querySelector('[data-quest-action=ack-admin-gift]').click();
+                for (let i = 0; i < 80 && document.querySelector('.admin-gift-notification'); i++) await wait(50);
+                if (document.querySelector('.admin-gift-notification')) throw Error('Gift acknowledgement did not close notice');
+                if (scene.registry.get('inventory').adminGifts.length) throw Error('Gift notice was not acknowledged');
+                if (!scene.input.enabled) throw Error('Gift acknowledgement did not restore input');
+            };
+            await give('currency', 23, 'coin-symbol.png');
+            await give('rankingPoints', 40, 'levelup-symbol.png');
+            await give('both', 17, 'coin-symbol.png', 25, true);
+            const after = scene.registry.get('inventory');
+            if (after.currency !== initial.currency + 40 || after.rankingPoints !== initial.rankingPoints + 65) throw Error('Grant totals incorrect');
+        })()`);
+        console.log('PASS browser: individual and room grants, combined money/ranking, sender/amount/icons, acknowledgement and input restoration');
+    }
+    if (process.argv.includes('--cafe')) {
+        await evaluate(`(async () => {
+            const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const game = window.inventoryTestGame;
+            let square = game.scene.getScene('Game');
+            if (square.cafeBuilding.texture.key !== 'coffee-building' || !square.cafeDoorOutline) throw Error('Cafe artwork or outline missing');
+            square.cafeEntrance.emit('pointerdown');
+            if (square.pendingTransition?.sceneKey !== 'Cafe') throw Error('Cafe door did not start entrance movement');
+            square.player.container.setPosition(square.cafeEntrancePoint.x, square.cafeEntrancePoint.y);
+            square.player.moveTarget = null;
+            square.updateRoom(0);
+            for (let i = 0; i < 100; i++) {
+                if (game.scene.isActive('Cafe') && game.scene.getScene('Cafe').multiplayer?.socket.connected) break;
+                await wait(100);
+            }
+            const cafe = game.scene.getScene('Cafe');
+            if (!game.scene.isActive('Cafe') || !cafe.multiplayer?.socket.connected) throw Error('Cafe scene did not connect');
+            const cafeAuth = await new Promise(resolve => cafe.multiplayer.socket.auth(resolve));
+            if (cafeAuth.room !== 'Cafe') throw Error('Cafe connected to wrong multiplayer room');
+            const mia = cafe.residents?.get('mia');
+            const miaBody = mia?.container.list.find(child => child.texture?.key === 'resident:mia');
+            if (!miaBody || Math.abs(miaBody.displayHeight - 148) > 0.01) throw Error('Mia artwork or resident missing');
+            miaBody.emit('pointerdown', null, 0, 0, { stopPropagation() {} });
+            if (mia.dialogue?.querySelector('h2').textContent !== 'מיה'
+                || mia.dialogue.querySelector('.resident-label').textContent !== 'בעלת בית הקפה') throw Error('Mia profile missing');
+            if (cafe.input.enabled || mia.dialogue.querySelector('.resident-quests-empty').hidden) throw Error('Mia dialogue input lock or empty quests missing');
+            mia.dialogue.querySelector('.resident-close').click();
+            await wait(400);
+            if (cafe.activeResident || !cafe.input.enabled) throw Error('Mia dialogue did not restore world interactions');
+            cafe.exit.emit('pointerdown');
+            cafe.player.container.setPosition(cafe.exitPoint.x, cafe.exitPoint.y);
+            cafe.player.moveTarget = null;
+            cafe.updateRoom(0);
+            for (let i = 0; i < 100; i++) {
+                if (game.scene.isActive('Game') && game.scene.getScene('Game').multiplayer?.socket.connected) break;
+                await wait(100);
+            }
+            square = game.scene.getScene('Game');
+            if (!game.scene.isActive('Game')) throw Error('Cafe exit failed');
+            if (Math.hypot(square.player.container.x - square.cafeEntrancePoint.x, square.player.container.y - square.cafeEntrancePoint.y) > 2) throw Error('Returning player did not spawn outside cafe');
+            await wait(1200);
+        })()`);
+        console.log('PASS browser: cafe artwork, door interaction, multiplayer room, interior and return beside cafe door');
+    }
     const screenshot = await send('Page.captureScreenshot', { format: 'png' });
     const filename = path.join(os.tmpdir(), process.argv.includes('--snow-full') ? 'vw-snow-catch.png' : process.argv.includes('--inventory') ? 'vw-inventory.png' : 'vw-account-menu.png');
     fs.writeFileSync(filename, Buffer.from(screenshot.data, 'base64'));

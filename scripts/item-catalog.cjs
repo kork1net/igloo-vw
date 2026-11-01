@@ -63,14 +63,18 @@ function buildCatalog(directory = itemsDirectory) {
             }
             for (const variant of metadata.variants || []) {
                 if (!variant || !/^[a-z0-9_-]+$/.test(variant.id || '')
-                    || (variant.hue === undefined && variant.tint === undefined)
+                    || (variant.hue === undefined && variant.tint === undefined && variant.palette === undefined)
                     || (variant.hue !== undefined && (!Number.isFinite(variant.hue) || Math.abs(variant.hue) > 180))
-                    || (variant.tint !== undefined && !/^#[0-9a-f]{6}$/i.test(variant.tint))) {
+                    || (variant.tint !== undefined && !/^#[0-9a-f]{6}$/i.test(variant.tint))
+                    || (variant.palette !== undefined && (!variant.palette || typeof variant.palette !== 'object'
+                        || Array.isArray(variant.palette) || !Object.keys(variant.palette).length
+                        || Object.entries(variant.palette).some(([from, to]) => !/^#[0-9a-f]{6}$/i.test(from) || typeof to !== 'string' || !/^#[0-9a-f]{6}$/i.test(to))))) {
                     throw new Error(`Invalid color variant: ${relative}`);
                 }
                 items.push({ ...item, id: `${id}--${variant.id}`,
                     name: variant.name || `${item.name} (${variant.id})`,
                     sourceItem: id, hue: variant.hue || 0,
+                    ...(variant.palette !== undefined ? { palette: variant.palette } : {}),
                     ...(variant.tint !== undefined ? { tint: parseInt(variant.tint.slice(1), 16) } : {}) });
             }
         }

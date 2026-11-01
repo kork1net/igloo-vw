@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" shape-rendering="crispEdges">
+  <!-- 16px exterior trim; crystals are rendered separately at their larger size. -->
+  <path fill="#173d60" fill-rule="evenodd" d="M12 0H116V4H124V12H128V116H124V124H116V128H12V124H4V116H0V12H4V4H12ZM16 16V112H112V16Z"/>
+  <path fill="#4b98c1" fill-rule="evenodd" d="M12 4H116V8H120V12H124V116H120V120H116V124H12V120H8V116H4V12H8V8H12ZM14 14V114H114V14Z"/>
+  <path fill="#dbf7ff" d="M16 6H112V10H16ZM6 16H10V112H6Z"/>
+  <path fill="#2e729b" d="M118 16H122V112H118ZM16 118H112V122H16Z"/>
+  <path fill="#8fd3ed" d="M16 10H112V12H16ZM10 16H12V112H10Z"/>
+  <defs>
+    <!-- Solid corner joints bridge the straight rails to the ice crystals. -->
+    <g id="joint">
+      <path fill="#173d60" d="M6 4H16V16H4V6H6Z"/>
+      <path fill="#4b98c1" d="M8 4H16V14H4V8H8Z"/>
+    </g>
+  </defs>
+  <use href="#joint"/>
+  <use href="#joint" transform="translate(128 0) scale(-1 1)"/>
+  <use href="#joint" transform="translate(0 128) scale(1 -1)"/>
+  <use href="#joint" transform="translate(128 128) scale(-1 -1)"/>
+  <!-- Each connector continues the color and thickness of its adjoining rail. -->
+  <path fill="#dbf7ff" d="M10 6H16V10H10ZM112 6H118V10H112ZM6 10H10V16H6ZM6 112H10V118H6Z"/>
+  <path fill="#8fd3ed" d="M10 10H16V12H10ZM112 10H118V12H112ZM10 10H12V16H10ZM10 112H12V118H10Z"/>
+  <path fill="#2e729b" d="M118 10H122V16H118ZM118 112H122V118H118ZM10 118H16V122H10ZM112 118H118V122H112Z"/>
+</svg>

@@ -113,6 +113,7 @@ export class Resident {
             </section>`;
         overlay.querySelector('.resident-portrait').src = this.definition.image;
         overlay.querySelector('h2').textContent = this.definition.name;
+        if (this.definition.role) overlay.querySelector('.resident-label').textContent = this.definition.role;
         overlay.querySelector('.resident-greeting').textContent = this.definition.greeting;
         const close = () => {
             if (overlay.windowClosing) return;

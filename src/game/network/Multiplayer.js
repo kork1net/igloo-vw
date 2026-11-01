@@ -5,6 +5,8 @@ import { io } from 'socket.io-client';
 import { SERVER_URL, saveToken } from './Auth';
 import { createAdminBadge } from '../objects/AdminBadge';
 import { createMinigameBadge } from '../objects/MinigameBadge';
+import { showPendingAdminGift } from '../ui/AdminGrants';
+import { receiveTradeState, closeTradeWindow } from '../ui/TradeWindow';
 
 class RemotePlayer {
     constructor(scene, data) {
@@ -209,11 +211,16 @@ export default class Multiplayer {
         });
 
         this.socket.on('authRequired', () => this.leaveAccount());
+        this.socket.on('accountReset', () => this.leaveAccount());
         this.socket.on('inventoryUpdated', inventory => this.applyInventory(inventory));
+        this.socket.on('trade:state', state => receiveTradeState(this.scene, state));
+        this.socket.on('trade:closed', result => closeTradeWindow(this.scene, result));
+        this.socket.on('disconnect', () => closeTradeWindow(this.scene, { reason: 'ההחלפה בוטלה בעקבות ניתוק.', id: this.scene.tradeWindow?.state.id }));
         this.socket.on('snow:update', state => this.scene.snowGame?.applyState(state));
         this.socket.on('snow:error', message => this.scene.snowGame?.error(message));
         this.socket.on('itemRaritiesUpdated', values => {
             this.scene.registry.set('itemRarities', values);
+            this.scene.tradeWindow?.render();
             if (this.scene.sys.isActive() && this.scene.inventoryWindow) {
                 this.scene.inventoryWindow.destroy();
                 this.scene.inventoryWindow = null;
@@ -292,6 +299,7 @@ export default class Multiplayer {
         }
 
         const player = new RemotePlayer(this.scene, data);
+        player.id = id;
         this.remotePlayers.set(id, player);
     }
 
@@ -352,6 +360,7 @@ export default class Multiplayer {
     }
 
     update(delta) {
+        showPendingAdminGift(this.scene);
         for (const remotePlayer of this.remotePlayers.values()) {
             remotePlayer.update(delta);
         }

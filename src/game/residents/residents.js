@@ -1,9 +1,27 @@
 // Stable IDs will also identify residents when quest chains are added.
 export const residents = [
     {
+        id: 'mia',
+        room: 'Cafe',
+        name: 'מיה',
+        role: 'בעלת בית הקפה',
+        texture: 'resident:mia',
+        image: 'assets/residents/mia.png',
+        displayHeight: 148,
+        position: { x: 0.63, y: 0.4 },
+        greeting: 'ברוכים הבאים לבית הקפה! אני מיה, בעלת המקום. זה המקום שלי לקפה חם, למשהו מתוק ולשיחה טובה. תרגישו בבית!',
+        questChainIds: [],
+        speechLines: [
+            'מי רוצה להתחמם עם כוס קפה?',
+            'אין כמו משהו מתוק ביום מושלג!',
+            'ברוכים הבאים! תמיד יש כאן מקום לחברים.'
+        ]
+    },
+    {
         id: 'leo',
         room: 'Game',
-        name: 'השוטר ליאו',
+        name: 'ליאו',
+        role: 'השוטר המקומי',
         texture: 'resident:leo',
         image: 'assets/residents/Leo.png',
         displayHeight: 148,

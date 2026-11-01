@@ -16,6 +16,7 @@ vm.runInNewContext(fs.readFileSync('server/index.cjs', 'utf8'), {
         : name === '../shared/collision.js' ? require('../shared/collision.js')
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
+        : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
         : name === './accounts.cjs' ? { Accounts: class {

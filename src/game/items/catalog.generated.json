@@ -81,6 +81,14 @@
       "order": 6
     },
     {
+      "id": "body-color/skin",
+      "name": "צבע גוף",
+      "slot": "bodyColor",
+      "texture": "player",
+      "tint": 15844773,
+      "order": 8
+    },
+    {
       "id": "body-color/white",
       "name": "לבן",
       "slot": "bodyColor",
@@ -109,12 +117,90 @@
     {
       "id": "hair/eye-cover-girl-hair",
       "slot": "hair",
-      "name": "eye-cover-girl-hair",
+      "name": "שיער מכסה עין חום",
       "texture": "clothing:hair/eye-cover-girl-hair",
       "path": "assets/items/hair/eye-cover-girl-hair.png",
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "hair/eye-cover-girl-hair--black",
+      "slot": "hair",
+      "name": "שיער מכסה עין שחור",
+      "texture": "clothing:hair/eye-cover-girl-hair",
+      "path": "assets/items/hair/eye-cover-girl-hair.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/eye-cover-girl-hair",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#303541",
+        "#663931": "#171c27",
+        "#8e625b": "#4a5261"
+      }
+    },
+    {
+      "id": "hair/eye-cover-girl-hair--blonde",
+      "slot": "hair",
+      "name": "שיער מכסה עין בלונדיני",
+      "texture": "clothing:hair/eye-cover-girl-hair",
+      "path": "assets/items/hair/eye-cover-girl-hair.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/eye-cover-girl-hair",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#e5c36c",
+        "#663931": "#b88a42",
+        "#8e625b": "#f4dc92"
+      }
+    },
+    {
+      "id": "hair/short-hair",
+      "slot": "hair",
+      "name": "שיער קצר חום",
+      "texture": "clothing:hair/short-hair",
+      "path": "assets/items/hair/short-hair.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hair/short-hair--black",
+      "slot": "hair",
+      "name": "שיער קצר שחור",
+      "texture": "clothing:hair/short-hair",
+      "path": "assets/items/hair/short-hair.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/short-hair",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#303541",
+        "#663931": "#171c27",
+        "#8e625b": "#4a5261"
+      }
+    },
+    {
+      "id": "hair/short-hair--blonde",
+      "slot": "hair",
+      "name": "שיער קצר בלונדיני",
+      "texture": "clothing:hair/short-hair",
+      "path": "assets/items/hair/short-hair.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/short-hair",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#e5c36c",
+        "#663931": "#b88a42",
+        "#8e625b": "#f4dc92"
+      }
     },
     {
       "id": "hat/green-hat1",
@@ -164,6 +250,16 @@
       "hue": 160
     },
     {
+      "id": "pants/baggy-gray-pants",
+      "slot": "pants",
+      "name": "baggy-gray-pants",
+      "texture": "clothing:pants/baggy-gray-pants",
+      "path": "assets/items/pants/baggy-gray-pants.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
       "id": "pants/blue-jeans",
       "slot": "pants",
       "name": "מכנס כחול כהה",
@@ -208,6 +304,16 @@
       "walkTextures": {},
       "sourceItem": "pants/blue-jeans",
       "hue": 60
+    },
+    {
+      "id": "pants/blue-shorts",
+      "slot": "pants",
+      "name": "blue-shorts",
+      "texture": "clothing:pants/blue-shorts",
+      "path": "assets/items/pants/blue-shorts.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
     },
     {
       "id": "shirt/black-shirt",

@@ -37,7 +37,30 @@ export function loadClothing(scene) {
 }
 
 export function getClothingTexture(scene, item, bodyTexture = 'player') {
-    const texture = item.walkTextures?.[bodyTexture]?.texture || item.texture;
+    let texture = item.walkTextures?.[bodyTexture]?.texture || item.texture;
+    if (item.palette) {
+        const key = `${texture}:palette:${JSON.stringify(item.palette)}`;
+        if (!scene.textures.exists(key)) {
+            const source = scene.textures.get(texture).getSourceImage();
+            const canvas = document.createElement('canvas');
+            canvas.width = source.width; canvas.height = source.height;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.drawImage(source, 0, 0);
+            const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+            const colors = new Map(Object.entries(item.palette).map(([from, to]) => [parseInt(from.slice(1), 16), parseInt(to.slice(1), 16)]));
+            for (let i = 0; i < pixels.data.length; i += 4) {
+                if (!pixels.data[i + 3]) continue;
+                const color = colors.get((pixels.data[i] << 16) | (pixels.data[i + 1] << 8) | pixels.data[i + 2]);
+                if (color === undefined) continue;
+                pixels.data[i] = color >> 16;
+                pixels.data[i + 1] = (color >> 8) & 255;
+                pixels.data[i + 2] = color & 255;
+            }
+            context.putImageData(pixels, 0, 0);
+            scene.textures.addSpriteSheet(key, canvas, { frameWidth: item.frameWidth, frameHeight: item.frameHeight });
+        }
+        texture = key;
+    }
     if (!item.hue || scene.game.renderer.gl) return texture;
     // Canvas renderer fallback: recolor once per shared sheet, never on every frame.
     const key = `${texture}:hue:${item.hue}`;

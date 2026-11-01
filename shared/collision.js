@@ -5,7 +5,13 @@ export function getShopColliders(square) {
     // Only the lower wall footprint is solid. Keep the doorway open.
     return [[shop.wallLeft, shop.doorLeft], [shop.doorRight, shop.wallRight]]
         .map(([start, end]) => ({ left: left + start * shop.scale,
-            right: left + end * shop.scale, top, bottom: shop.y }));
+            right: left + end * shop.scale, top,
+            bottom: shop.y - (shop.height - (shop.floorY ?? shop.height)) * shop.scale }));
+}
+
+export function getSquareColliders(square) {
+    return [...getShopColliders(square),
+        ...(square.cafe ? getShopColliders({ ...square, shop: square.cafe }) : [])];
 }
 
 export function resolveMovement(from, to, colliders = []) {

@@ -1,4 +1,5 @@
 import { openHtmlWindow, closeHtmlWindow } from './WindowTransition';
+import { applyHtmlRarityEffect } from './ItemRarityEffect';
 
 export async function openRarityManager(scene) {
     if (!scene.registry.get('auth')?.user?.isAdmin || scene.rarityManager) return;
@@ -69,7 +70,10 @@ export async function openRarityManager(scene) {
             select.setAttribute('aria-label', `נדירות ${item.name}`);
             for (const grade of ['C', 'B', 'A', 'S']) select.add(new Option(grade, grade));
             select.value = item.rarity;
-            const updatePreview = () => { preview.style.backgroundPositionX = `${-58 * ['C', 'B', 'A', 'S'].indexOf(select.value)}px`; };
+            const updatePreview = () => {
+                preview.style.backgroundPositionX = `${-58 * ['C', 'B', 'A', 'S'].indexOf(select.value)}px`;
+                applyHtmlRarityEffect(preview, select.value);
+            };
             updatePreview();
             select.addEventListener('change', async () => {
                 select.disabled = true;

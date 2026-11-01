@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { getShopColliders, resolveMovement } = require('../shared/collision.js');
+const { getShopColliders, getSquareColliders, resolveMovement } = require('../shared/collision.js');
 const square = require('../shared/square.json');
 const walls = getShopColliders(square);
 const collides = point => walls.some(wall => point.x > wall.left - 12 && point.x < wall.right + 12
@@ -21,3 +21,13 @@ const recovered = resolveMovement({ x: wallX, y: 330 }, { x: wallX, y: 330 }, wa
 assert.equal(collides(recovered), false);
 assert.deepEqual(resolveMovement({ x: 0, y: 0 }, { x: 25, y: 50 }), { x: 25, y: 50 });
 console.log('PASS: front/back walls, fast crossing, doorway, sliding, overlap recovery and rooms without collision');
+const cafeWalls = getSquareColliders(square).slice(walls.length);
+assert.equal(cafeWalls.length, 2);
+const cafeWallX = (cafeWalls[0].left + cafeWalls[0].right) / 2;
+const cafeDoorX = (cafeWalls[0].right + cafeWalls[1].left) / 2;
+const cafeFrom = cafeWalls[0].bottom + 40;
+const cafeTo = cafeWalls[0].top - 60;
+const cafeBlocked = resolveMovement({ x: cafeWallX, y: cafeFrom }, { x: cafeWallX, y: cafeTo }, cafeWalls);
+assert.ok(cafeBlocked.y + 24 >= cafeWalls[0].bottom + 4);
+assert.ok(Math.abs(resolveMovement({ x: cafeDoorX, y: cafeFrom }, { x: cafeDoorX, y: cafeTo }, cafeWalls).y - cafeTo) < 0.001);
+console.log('PASS: cafe walls and open doorway share client/server collision geometry');

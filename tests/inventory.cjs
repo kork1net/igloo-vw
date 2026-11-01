@@ -22,19 +22,21 @@ try {
     assert.equal(first.equipped.bodyColor, white);
     assert.equal(first.equipped.shirt, null);
     assert.throws(() => store.equip(user, shirt, true, catalog), /בבעלותך/);
-    assert.throws(() => store.purchase(user, white, catalog));
+    assert.equal(first.quantities[white], 1);
     assert.throws(() => store.purchase(user, 'nonexistent', catalog));
     store.purchase(user, shirt, catalog);
     store.purchase(user, blue, catalog);
     assert.equal(store.snapshot(user, catalog).currency, economy.startingCurrency - 2 * economy.itemPrice);
-    assert.throws(() => store.purchase(user, shirt, catalog), /כבר/);
-    assert.equal(store.snapshot(user, catalog).currency, economy.startingCurrency - 2 * economy.itemPrice);
+    store.purchase(user, shirt, catalog);
+    assert.equal(store.snapshot(user, catalog).quantities[shirt], 2);
+    assert.equal(store.snapshot(user, catalog).currency, economy.startingCurrency - 3 * economy.itemPrice);
     store.equip(user, shirt, true, catalog);
     store.equip(user, blue, true, catalog);
     const saved = new Inventories(directory).snapshot(user, catalog);
     assert.equal(saved.equipped.shirt, shirt);
     assert.equal(saved.equipped.bodyColor, blue);
-    assert.equal(saved.currency, economy.startingCurrency - 2 * economy.itemPrice);
+    assert.equal(saved.currency, economy.startingCurrency - 3 * economy.itemPrice);
+    assert.equal(saved.quantities[shirt], 2);
     assert.equal(saved.items.length, 3);
     assert.deepEqual(store.snapshot(other, catalog).items, [white]);
 
@@ -52,7 +54,13 @@ try {
     const withoutShirt = { ...catalog, items: catalog.items.filter(item => item.id !== shirt) };
     assert.equal(store.snapshot(user, withoutShirt).equipped.shirt, null);
     assert.equal(store.snapshot(user, catalog).equipped.shirt, shirt);
-    assert.equal(store.shopCatalog(catalog).length, 28);
+    assert.equal(store.shopCatalog(catalog).length, 34);
+    const shopHair = store.shopCatalog(catalog).filter(item => item.id.startsWith('hair/'));
+    assert.equal(shopHair.length, 6);
+    for (const base of ['eye-cover-girl-hair', 'short-hair']) {
+        for (const suffix of ['', '--blonde', '--black']) assert.ok(shopHair.some(item => item.id === `hair/${base}${suffix}`));
+    }
+    assert.ok(!shopHair.some(item => item.id === 'hair/boy-messy-hair-1'));
     assert.ok(store.shopCatalog(catalog).every(item => item.price === 10));
     assert.ok(store.shopCatalog(catalog).some(item => item.id === white));
     for (const id of ['shirt/red-dress', 'shirt/red-dress--blue', 'shirt/red-dress--green', 'shirt/red-dress--purple']) {

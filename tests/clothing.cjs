@@ -39,6 +39,17 @@ try {
     assert.equal(variant.walkTextures['player-walk-1'].texture, 'clothing:black-shirt:walk-1');
     assert.equal(normalizeEquipment({ shirt: variant.id }, catalog).shirt, variant.id);
     assert.equal(catalog.items.find(item => item.id === 'hat/cap').name, 'My cap');
+    fs.writeFileSync(path.join(testRoot, 'hair/short.json'), JSON.stringify({ variants: [
+        { id: 'blonde', palette: { '#7d534c': '#e5c36c' } }
+    ] }));
+    const paletteItem = buildCatalog(testRoot).items.find(item => item.id === 'hair/short--blonde');
+    assert.deepEqual(paletteItem.palette, { '#7d534c': '#e5c36c' });
+    assert.equal(paletteItem.texture, 'clothing:hair/short');
+    for (const palette of [null, [], {}, { invalid: '#abcdef' }, { '#7d534c': 'bad-color' }]) {
+        fs.writeFileSync(path.join(testRoot, 'hair/short.json'), JSON.stringify({ variants: [{ id: 'bad', palette }] }));
+        assert.throws(() => buildCatalog(testRoot), /Invalid color variant/);
+    }
+    fs.unlinkSync(path.join(testRoot, 'hair/short.json'));
     const equipped = normalizeEquipment({ shirt: 'blue-shirt', hat: 'hat/cap', pants: 'blue-shirt' }, catalog);
     assert.equal(equipped.shirt, 'blue-shirt');
     assert.equal(equipped.hat, 'hat/cap');
@@ -154,6 +165,7 @@ try {
         : name === '../shared/collision.js' ? require('../shared/collision.js')
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
+        : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
             : name === './accounts.cjs' ? { Accounts: class {

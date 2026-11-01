@@ -3,35 +3,31 @@ import { createCoinIcon } from '../ui/CoinIcon';
 import { createRankingIcon } from '../ui/RankingIcon';
 import { openHtmlWindow, closeHtmlWindow } from '../ui/WindowTransition';
 import { addHoverOutline } from '../ui/HoverOutline';
+import { addButtonHover } from '../ui/ButtonHover';
 import { setWorldDepth } from '../objects/WorldDepth';
+import { createMinigameBadge } from '../objects/MinigameBadge';
 
 export function createSnowGameEntry(scene) {
-    if (!scene.textures.exists('snow-game-snowman')) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 94; canvas.height = 132;
-        const c = canvas.getContext('2d');
-        c.lineWidth = 3; c.strokeStyle = '#709abd'; c.fillStyle = '#f6fcff';
-        for (const [x, y, r] of [[47, 95, 33], [47, 56, 26], [47, 24, 20]]) {
-            c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.stroke();
-        }
-        c.fillStyle = '#17324d';
-        for (const [x, y] of [[40, 21], [54, 21], [47, 62], [47, 91], [47, 106]]) {
-            c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.fill();
-        }
-        c.fillStyle = '#ef9c45'; c.beginPath(); c.moveTo(46, 26); c.lineTo(65, 30); c.lineTo(46, 32); c.fill();
-        c.fillStyle = '#8c83cf'; c.fillRect(25, 41, 44, 10); c.fillRect(56, 47, 10, 24);
-        scene.textures.addCanvas('snow-game-snowman', canvas);
-    }
-    const container = scene.add.container(scene.scale.width * 0.84, scene.scale.height * 0.74);
-    const shadow = scene.add.ellipse(0, 0, 70, 16, 0x536b7d, 0.22);
+    const container = scene.add.container(scene.scale.width * 0.94, scene.scale.height * 0.71);
+    const shadow = scene.add.ellipse(0, 0, 96, 16, 0x536b7d, 0.22);
     const snowman = scene.add.image(0, 0, 'snow-game-snowman').setOrigin(0.5, 1)
         .setInteractive({ pixelPerfect: true, useHandCursor: true });
     const label = scene.add.text(0, 23, 'תופסים שלג', { fontFamily: 'Rubik, Arial, sans-serif',
         fontSize: '18px', fontStyle: 'bold', color: '#17324d', stroke: '#ffffff', strokeThickness: 3,
         resolution: 2 }).setOrigin(0.5);
     container.add([shadow, snowman, label]);
+    const gameBadge = createMinigameBadge(scene, container).setVisible(true);
+    gameBadge.y = -snowman.displayHeight - 10;
+    if (!(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)) {
+        const floating = scene.tweens.add({
+            targets: gameBadge, y: gameBadge.y - 6, duration: 1000,
+            ease: 'Sine.easeInOut', yoyo: true, repeat: -1
+        });
+        gameBadge.once('destroy', () => floating.stop());
+    }
     setWorldDepth(container, container.y, scene.scale.height);
     addHoverOutline(scene, snowman);
+    addButtonHover(scene, snowman, [container]);
     snowman.on('pointerdown', (pointer, x, y, event) => {
         event.stopPropagation();
         scene.sound.play('wood-tap-ui');

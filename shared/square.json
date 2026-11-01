@@ -1,5 +1,20 @@
 {
   "width": 1280,
+  "cafe": {
+    "xRatio": 0.80,
+    "y": 440,
+    "scale": 1.1,
+    "width": 370,
+    "height": 387,
+    "depthRatio": 0.78,
+    "floorY": 335,
+    "wallLeft": 40,
+    "wallRight": 320,
+    "doorLeft": 184,
+    "doorRight": 234,
+    "doorCenter": 208,
+    "doorBottom": 324
+  },
   "shop": {
     "xRatio": 0.17,
     "y": 380,

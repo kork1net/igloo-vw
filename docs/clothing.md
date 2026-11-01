@@ -109,6 +109,14 @@ dimensions still need artwork positioned to match the body's bottom-center origi
 
 ## Color variants without extra PNGs
 
+For exact pixel-art recoloring (including brighter blonde or neutral black hair), a
+variant can use `palette`: an object mapping original `#rrggbb` colors to replacement
+colors. For example, `"palette": { "#7d534c": "#e5c36c", "#663931": "#b88a42" }`.
+Alpha and unmapped colors are preserved. Each recolored sheet is generated once and
+cached for both renderers, inventory/catalog previews and local/remote characters.
+The two hair metadata files demonstrate this; their six brown/blonde/black items
+are explicitly listed in `server/shop-catalog.json`.
+
 Add `variants` to the base item's metadata file. For example, `pants/blue-jeans.json`:
 
 ```json
