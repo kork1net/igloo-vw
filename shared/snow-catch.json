@@ -1,0 +1,9 @@
+{
+  "duration": 45000,
+  "width": 760,
+  "height": 500,
+  "basketY": 444,
+  "basketWidth": 100,
+  "basketSpeed": 700,
+  "points": { "snow": 10, "gold": 30, "ice": -15 }
+}

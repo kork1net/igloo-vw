@@ -19,6 +19,15 @@ Exception: an equipped item whose source PNG filename ends with `necklace.png`
 and jackets. This also applies to its color variants and walking sheets, in both
 local/remote characters and previews. Keep necklaces in `accessory/` as usual.
 
+Accessories ending in `necklace.png` and `glasses.png` use independent equipped
+slots (`necklace` and `glasses`) under the same accessories tab. One necklace and
+one pair of glasses can be worn together; selecting another item of the same type
+replaces only that type. Color variants keep the type of their source sheet.
+Existing item IDs and ownership stay unchanged, and legacy saved `accessory`
+equipment is automatically read into the appropriate slot. Glasses draw above
+hair and eyelashes; necklaces stay below hair. Other accessories retain the
+generic `accessory` slot.
+
 For example, `public/assets/items/hat/red-cap.png` creates the item `hat/red-cap`.
 Items use their relative paths as IDs; keep paths stable after adding them.
 Admins automatically own all discovered items. Other players start with their chosen

@@ -19,10 +19,14 @@ async function client(auth) {
     clients.push(socket);
     return socket;
 }
-function event(socket, name) {
+function event(socket, name, predicate = () => true) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${name}`)), 4000);
-        socket.once(name, data => { clearTimeout(timer); resolve(data); });
+        const listener = data => {
+            if (!predicate(data)) return;
+            clearTimeout(timer); socket.off(name, listener); resolve(data);
+        };
+        socket.on(name, listener);
     });
 }
 function request(socket, name, data) {
@@ -75,17 +79,22 @@ function request(socket, name, data) {
 
     const anonymous = await client({});
     await event(anonymous, 'authRequired');
-    const game = await client({ token: login.token, room: 'Game', player: { username: 'Koko', isAdmin: true } });
+    const game = await client({ token: login.token, room: 'Game', player: { username: 'Koko', isAdmin: true, level: 3 } });
     const players = await event(game, 'currentPlayers');
     assert.equal(players[game.id].username, 'Alice');
     assert.equal(players[game.id].isAdmin, false);
+    assert.equal(players[game.id].level, 1);
     const admin = await request(account, 'auth:register', { username: 'Koko', password });
     assert.equal(admin.user.isAdmin, true);
+    assert.equal(admin.inventory.level, 3);
+    assert.equal(admin.inventory.rankingPoints, 0);
+    assert.equal(admin.inventory.pointsToNextLevel, 0);
     const catalog = require('../scripts/item-catalog.cjs').buildCatalog();
     assert.equal(admin.inventory.items.length, catalog.items.length);
     const adminSocket = await client({ token: admin.token, room: 'Game' });
     const adminPlayers = await event(adminSocket, 'currentPlayers');
     assert.equal(adminPlayers[adminSocket.id].isAdmin, true);
+    assert.equal(adminPlayers[adminSocket.id].level, 3);
     const observer = await client({ token: registered.token, room: 'Game' });
     await event(observer, 'currentPlayers');
     assert.equal((await request(game, 'admin:items', {})).ok, false);
@@ -146,6 +155,38 @@ function request(socket, name, data) {
     const movedAgain = event(observer, 'playerMoved');
     game.emit('playerMove', { x: 210, y: 210, currency: 999999, equipped: { shirt: null } });
     assert.equal((await movedAgain).equipped.shirt, shirt);
+    assert.equal((await request(shop, 'snow:start', {})).ok, false);
+    assert.equal((await request(shop, 'minigame:presence', { game: 'snow-catch', active: true })).ok, false);
+    assert.equal((await request(game, 'minigame:presence', { game: 'unknown', active: true })).ok, false);
+    const presence = event(observer, 'playerMoved');
+    const snow = await request(game, 'snow:start', {});
+    assert.equal((await presence).minigame, 'snow-catch');
+    assert.equal(snow.ok, true);
+    assert.equal(snow.state.phase, 'playing');
+    assert.equal((await request(observer, 'snow:start', {})).ok, false);
+    const forged = await request(game, 'snow:state', { score: 1000000, coins: 1000000 });
+    assert.equal(forged.state.score, 0);
+    assert.equal(forged.state.result, null);
+    const leftMinigame = event(observer, 'playerMoved');
+    assert.equal((await request(game, 'snow:cancel', { id: snow.state.id })).ok, true);
+    assert.equal((await leftMinigame).minigame, null);
+    assert.equal((await request(game, 'snow:state', {})).ok, false);
+    const afterCancel = await request(account, 'auth:login', { username: 'Alice', password });
+    assert.equal(afterCancel.inventory.currency, relogin.inventory.currency);
+    assert.equal(afterCancel.inventory.rankingPoints, 0);
+    assert.equal((await request(shop, 'quest:accept', { chainId: 'leo-welcome' })).ok, false);
+    assert.equal((await request(game, 'quest:claim', { chainId: 'leo-welcome', stepId: 'first-purchase' })).ok, false);
+    assert.equal((await request(game, 'quest:accept', { chainId: 'invalid' })).ok, false);
+    assert.equal((await request(game, 'quest:accept', { chainId: 'leo-welcome' })).ok, true);
+    const questSync = event(observer, 'inventoryUpdated', inventory => inventory.quests?.['leo-welcome']?.claimedSteps === 1);
+    const questReward = await request(game, 'quest:claim', { chainId: 'leo-welcome', stepId: 'first-purchase', coins: 999999 });
+    assert.equal(questReward.ok, true);
+    assert.deepEqual(questReward.questReward, { coins: 5, rankingPoints: 5, itemId: null });
+    assert.equal(questReward.inventory.currency, afterCancel.inventory.currency + 5);
+    assert.equal(questReward.inventory.rankingPoints, 5);
+    assert.equal((await questSync).quests['leo-welcome'].claimedSteps, 1);
+    assert.equal((await request(game, 'quest:claim', { chainId: 'leo-welcome', stepId: 'first-purchase' })).ok, false);
+    assert.equal((await request(game, 'quest:claim', { chainId: 'leo-welcome', stepId: 'snow-catch' })).ok, false);
     await request(game, 'auth:logout');
     assert.equal((await request(account, 'auth:resume', login.token)).ok, false);
     console.log('PASS: registration, case-insensitive and concurrent duplicates, login, persistence, hashing, sessions, access control, identity, rooms, logout');

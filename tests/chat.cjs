@@ -50,6 +50,9 @@ const broadcasts = [];
 class Server { on(event, callback) { connect = callback; } to() { return { emit() {} }; } }
 vm.runInNewContext(fs.readFileSync('server/index.cjs', 'utf8'), {
     require: name => name === 'socket.io' ? { Server }
+        : name === '../shared/collision.js' ? require('../shared/collision.js')
+        : name === '../shared/square.json' ? require('../shared/square.json')
+        : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
         : name === './accounts.cjs' ? { Accounts: class {

@@ -2,6 +2,8 @@ import { showChatMessage, updateChatMessage } from './ChatBubble';
 import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
 import { Math as PhaserMath } from 'phaser';
 import { createAdminBadge } from './AdminBadge';
+import { createMinigameBadge } from './MinigameBadge';
+import { resolveMovement } from '../../../shared/collision';
 
 export class Player {
     constructor(scene, x, y, username = 'Player1') {
@@ -37,7 +39,7 @@ export class Player {
         this.body.setScale(1);
         // Username
         const name = scene.add.text(0, 37, username, {
-            fontFamily: 'Rubik, Arial, sans-serif',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontStyle: 'bold',
             fontSize: '17px',
             color: '#17324d',
@@ -54,6 +56,7 @@ export class Player {
         this.clothing = new ClothingLayers(scene, this.container, 0, 24, 1, this.body, this.gender);
         this.adminBadge = createAdminBadge(scene, this.container,
             scene.registry.get('auth')?.user?.isAdmin);
+        this.minigameBadge = createMinigameBadge(scene, this.container);
         this.container.setDepth(10);
 
         // Keyboard controls
@@ -76,6 +79,10 @@ export class Player {
 
     setAdmin(isAdmin) {
         this.adminBadge.setVisible(isAdmin === true);
+    }
+
+    setMinigame(game) {
+        this.minigameBadge.setVisible(Boolean(game));
     }
 
     setShirtEquipped(equipped) {
@@ -268,6 +275,15 @@ export class Player {
             this.scene.scale.height - this.movementMargin
         );
         
+        if (this.scene.colliders?.length) {
+            const resolved = resolveMovement({ x: previousX, y: previousY }, this.container, this.scene.colliders);
+            this.container.setPosition(resolved.x, resolved.y);
+            if (this.moveTarget && Math.hypot(resolved.x - previousX, resolved.y - previousY) < 0.01) {
+                this.moveTarget = null;
+                this.isRunning = false;
+                this.scene.pendingTransition = null;
+            }
+        }
         updateChatMessage(this);
         // Publish actual movement, including the final step and room boundaries.
         this.isMoving = this.container.x !== previousX || this.container.y !== previousY;

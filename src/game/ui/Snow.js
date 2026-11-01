@@ -22,7 +22,7 @@ export function createSnow(scene) {
         graphics.generateTexture('square-snowflake', 6, 6);
         graphics.destroy();
     }
-    // Keep the snowfall behind players and below the interface.
+    // Snow falls over the map and characters, while the interface stays above it.
     return scene.add.particles(0, 0, 'square-snowflake', {
         x: { min: 4, max: scene.scale.width - 4 },
         y: -6,
@@ -36,5 +36,5 @@ export function createSnow(scene) {
         quantity: 1,
         maxAliveParticles: 80,
         advance: 22000
-    }).setDepth(2);
+    }).setDepth(80);
 }

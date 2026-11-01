@@ -39,7 +39,7 @@ export class Shop extends BaseRoom {
 
         // Shop title
         this.add.text(width / 2, 70, 'ITEM SHOP', {
-            fontFamily: 'Rubik, Arial, sans-serif',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontSize: '36px',
             color: '#69452b'
         }).setOrigin(0.5);
@@ -62,7 +62,7 @@ export class Shop extends BaseRoom {
             'Player1'
         );
         const catalogButton = this.add.text(width / 2, 135, 'קטלוג פריטים', {
-            fontFamily: 'Rubik, Arial, sans-serif', fontSize: '23px', color: '#ffffff',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '23px', color: '#ffffff',
             backgroundColor: '#3779a8', padding: { x: 22, y: 12 }
         }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
         this.addButtonHover(catalogButton);
@@ -83,7 +83,7 @@ export class Shop extends BaseRoom {
          .setInteractive({ useHandCursor: true });
 
         const exitLabel = this.add.text(width / 2, height - 100, 'EXIT', {
-            fontFamily: 'Rubik, Arial, sans-serif',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontSize: '20px',
             color: '#ffffff'
         }).setOrigin(0.5);

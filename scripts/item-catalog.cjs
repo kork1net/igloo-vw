@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // Order is also the order in which clothing is drawn over the body.
-const slots = ['bodyColor', 'shoes', 'pants', 'shirt', 'jacket', 'hair', 'hat', 'accessory'];
+const slots = ['bodyColor', 'shoes', 'pants', 'shirt', 'jacket', 'necklace', 'hair', 'hat', 'accessory', 'glasses'];
 const itemsDirectory = path.resolve(__dirname, '../public/assets/items');
 const catalogFile = path.resolve(__dirname, '../src/game/items/catalog.generated.json');
 
@@ -29,7 +29,11 @@ function buildCatalog(directory = itemsDirectory) {
             const metadataFile = filename.slice(0, -4) + '.json';
             const metadata = fs.existsSync(metadataFile)
                 ? JSON.parse(fs.readFileSync(metadataFile, 'utf8')) : {};
-            const slot = metadata.slot || (relative.includes('/') ? relative.split('/')[0] : 'shirt');
+            let slot = metadata.slot || (relative.includes('/') ? relative.split('/')[0] : 'shirt');
+            if (slot === 'accessory') {
+                if (/necklace$/i.test(id)) slot = 'necklace';
+                else if (/glasses$/i.test(id)) slot = 'glasses';
+            }
             if (!slots.includes(slot)) throw new Error(`Unknown clothing slot "${slot}": ${relative}`);
             const frameWidth = metadata.frameWidth ?? 64;
             const frameHeight = metadata.frameHeight ?? 78;
@@ -99,9 +103,11 @@ function writeCatalog() {
 }
 
 function normalizeEquipment(equipped, catalog) {
-    return Object.fromEntries(slots.map(slot => [slot,
-        catalog.items.some(item => item.id === equipped?.[slot] && item.slot === slot)
-            ? equipped[slot] : null]));
+    return Object.fromEntries(slots.map(slot => {
+        const legacy = ['necklace', 'glasses'].includes(slot) ? equipped?.accessory : null;
+        const id = equipped?.[slot] ?? legacy;
+        return [slot, catalog.items.some(item => item.id === id && item.slot === slot) ? id : null];
+    }));
 }
 
 module.exports = { buildCatalog, writeCatalog, normalizeEquipment, itemsDirectory };

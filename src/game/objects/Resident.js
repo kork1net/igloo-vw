@@ -1,3 +1,5 @@
+import { addHoverOutline } from '../ui/HoverOutline';
+import { renderResidentQuests } from '../ui/ResidentQuests';
 import { showChatMessage, clearChatMessage } from './ChatBubble';
 import { openHtmlWindow, closeHtmlWindow, closeWindow } from '../ui/WindowTransition';
 
@@ -16,34 +18,28 @@ export class Resident {
         const body = scene.add.image(0, 24, definition.texture).setOrigin(0.5, 1);
         body.setScale(definition.displayHeight / body.height);
         body.setInteractive({ useHandCursor: true });
-        if (scene.game.renderer.gl) {
-            body.enableFilters();
-            const glow = body.filters.external.addGlow(0xffffff, 0, 0, 1, false, 8, 8);
-            glow.setActive(false);
-            let glowTween;
-            const fadeGlow = visible => {
-                glowTween?.stop();
-                glow.setActive(true);
-                glowTween = scene.tweens.add({
-                    targets: glow,
-                    outerStrength: visible ? 3 : 0,
-                    duration: 220,
-                    ease: 'Sine.easeInOut',
-                    onComplete: () => { if (!visible) glow.setActive(false); }
-                });
-            };
-            body.on('pointerover', () => fadeGlow(true));
-            body.on('pointerout', () => fadeGlow(false));
-            body.once('destroy', () => glowTween?.stop());
-        } else {
-            body.on('pointerover', () => body.setTint(0xffffff));
-            body.on('pointerout', () => body.clearTint());
-        }
         const name = scene.add.text(0, 39, definition.name, {
-            fontFamily: 'Rubik, Arial, sans-serif', fontSize: '17px', fontStyle: 'bold',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '17px', fontStyle: 'bold',
             color: '#17324d', stroke: '#ffffff', strokeThickness: 3
         }).setOrigin(0.5);
         this.container.add([shadow, body, name]);
+        this.questReadyBadge = scene.add.image(0, -definition.displayHeight - 12, 'quest-mark')
+            .setOrigin(0.5).setVisible(false);
+        this.questReadyBadge.setScale(48 / this.questReadyBadge.height);
+        if (!(typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)) {
+            const markerFloat = scene.tweens.add({
+                targets: this.questReadyBadge,
+                y: this.questReadyBadge.y - 6,
+                duration: 1000,
+                ease: 'Sine.easeInOut',
+                yoyo: true,
+                repeat: -1
+            });
+            this.questReadyBadge.once('destroy', () => markerFloat.stop());
+        }
+        this.container.add(this.questReadyBadge);
+        this.refreshQuestMarker();
+        this.hoverOutline = addHoverOutline(scene, body);
         body.on('pointerdown', (pointer, localX, localY, event) => {
             event.stopPropagation();
             scene.sound.play('wood-tap-ui');
@@ -63,7 +59,7 @@ export class Resident {
         if (!lines?.length) return;
         const delay = minDelay + Math.floor(Math.random() * (maxDelay - minDelay + 1));
         this.speechTimer = this.scene.time.delayedCall(delay, () => {
-            if (!this.scene.activeResident && !this.scene.inventoryWindow && !this.scene.playerCard) {
+            if (!this.scene.activeResident && !this.scene.inventoryWindow && !this.scene.playerCard && !this.questReadyBadge.visible) {
                 const choices = lines.filter(line => line !== this.lastSpeech);
                 const available = choices.length ? choices : lines;
                 this.lastSpeech = available[Math.floor(Math.random() * available.length)];
@@ -84,10 +80,13 @@ export class Resident {
             scene.inventoryWindow = null;
         }
         scene.player.moveTarget = null;
+        scene.player.isMoving = false;
         scene.player.isRunning = false;
         scene.pendingTransition = null;
         Object.values(scene.player.cursors).forEach(key => key.reset());
         this.keyboardEnabled = scene.input.keyboard.enabled;
+        this.pointerEnabled = scene.input.enabled;
+        scene.input.enabled = false;
         scene.input.keyboard.enabled = false;
         scene.chatInput?.setVisible(false);
 
@@ -120,13 +119,13 @@ export class Resident {
             scene.sound.play('ui-close');
             this.closeDialogue();
         };
-        overlay.querySelectorAll('button').forEach(button => button.addEventListener('click', close));
+        overlay.querySelector('.resident-close').addEventListener('click', close);
         overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
         overlay.addEventListener('keydown', event => {
             event.stopPropagation();
             if (event.key === 'Escape') close();
             if (event.key === 'Tab') {
-                const buttons = [...overlay.querySelectorAll('button')];
+                const buttons = [...overlay.querySelectorAll('button')].filter(button => !button.disabled && !button.closest('[hidden]'));
                 event.preventDefault();
                 const next = (buttons.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
                 buttons[next].focus();
@@ -136,16 +135,33 @@ export class Resident {
         document.getElementById('game-container').append(overlay);
         this.dialogue = overlay;
         scene.activeResident = this;
+        this.refreshQuests();
         openHtmlWindow(overlay);
         overlay.querySelector('.resident-close').focus();
+        scene.input.keyboard.enabled = false;
+    }
+
+    refreshQuests() {
+        this.refreshQuestMarker();
+        renderResidentQuests(this);
+        this.questConversation?.refresh();
+    }
+
+    refreshQuestMarker() {
+        const quests = this.scene.registry.get('inventory')?.quests || {};
+        const ready = (this.definition.questChainIds || []).some(id => quests[id]?.steps.some(step => step.ready));
+        if (ready && !this.questReadyBadge?.visible) clearChatMessage(this);
+        this.questReadyBadge?.setVisible(ready);
     }
 
     closeDialogue(animate = true) {
+        this.questConversation?.close(false);
         if (!this.dialogue) return;
         closeHtmlWindow(this.dialogue, () => {
             this.dialogue = null;
             if (this.scene.activeResident !== this) return;
             this.scene.input.keyboard.enabled = this.keyboardEnabled;
+            this.scene.input.enabled = this.pointerEnabled;
             this.scene.chatInput?.setVisible(true);
             this.scene.activeResident = null;
         }, animate);

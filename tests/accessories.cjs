@@ -1,0 +1,52 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const vm = require('node:vm');
+const { buildCatalog, normalizeEquipment } = require('../scripts/item-catalog.cjs');
+const { Inventories } = require('../server/inventory.cjs');
+const catalog = buildCatalog();
+const necklace = catalog.items.find(item => item.id === 'accessory/golden-necklace');
+const glasses = catalog.items.find(item => item.id === 'accessory/black-sun-glasses');
+assert.equal(necklace.slot, 'necklace');
+assert.equal(glasses.slot, 'glasses');
+catalog.items.push({ ...necklace, id: 'accessory/silver-necklace' }, { ...glasses, id: 'accessory/red-glasses' });
+const legacy = normalizeEquipment({ accessory: necklace.id }, catalog);
+assert.equal(legacy.necklace, necklace.id);
+assert.equal(legacy.accessory, null);
+const source = fs.readFileSync('src/game/items/Clothing.js', 'utf8')
+    .replace("import catalog from './catalog.generated.json';", '').replace(/^export /gm, '');
+const clientNormalize = vm.runInNewContext(source + '\nnormalizeEquipment', { catalog });
+assert.equal(JSON.stringify(clientNormalize({ accessory: necklace.id })), JSON.stringify(legacy));
+assert.equal(normalizeEquipment({ accessory: glasses.id }, catalog).glasses, glasses.id);
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vw-accessories-'));
+try {
+    const store = new Inventories(directory);
+    const user = { id: 'admin', username: 'Admin', isAdmin: true };
+    store.equip(user, necklace.id, true, catalog);
+    store.equip(user, glasses.id, true, catalog);
+    let state = store.snapshot(user, catalog);
+    assert.equal(state.equipped.necklace, necklace.id);
+    assert.equal(state.equipped.glasses, glasses.id);
+    store.equip(user, 'accessory/silver-necklace', true, catalog);
+    state = store.snapshot(user, catalog);
+    assert.equal(state.equipped.necklace, 'accessory/silver-necklace');
+    assert.equal(state.equipped.glasses, glasses.id);
+    assert.equal(Object.values(state.equipped).includes(necklace.id), false);
+    store.equip(user, 'accessory/red-glasses', true, catalog);
+    state = store.snapshot(user, catalog);
+    assert.equal(state.equipped.glasses, 'accessory/red-glasses');
+    assert.equal(state.equipped.necklace, 'accessory/silver-necklace');
+    assert.deepEqual(new Inventories(directory).snapshot(user, catalog), state);
+    store.equip(user, 'accessory/red-glasses', false, catalog);
+    assert.equal(store.snapshot(user, catalog).equipped.necklace, 'accessory/silver-necklace');
+    const profile = store.load(user);
+    store.persist(user, { ...profile, equipped: { accessory: necklace.id } });
+    assert.equal(new Inventories(directory).snapshot(user, catalog).equipped.necklace, necklace.id);
+} finally {
+    const resolved = fs.realpathSync(directory);
+    assert.equal(path.dirname(resolved).toLowerCase(), fs.realpathSync(os.tmpdir()).toLowerCase());
+    assert.ok(path.basename(resolved).startsWith('vw-accessories-'));
+    fs.rmSync(resolved, { recursive: true });
+}
+console.log('PASS: necklace/glasses discovery, distinct types coexist, same types replace, selective unequip, persistence and legacy migration');

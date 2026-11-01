@@ -152,7 +152,8 @@ html, body {
     margin-top: 7px; border: 1px solid #b6cddd; border-radius: 9px;
     background: #f8fbfd; color: #17324d; font: 16px Rubik, Arial, sans-serif;
 }
-.account-panel input:focus { outline: 2px solid #6ca9d4; outline-offset: 1px; }
+.account-panel input:not([type="radio"]):not([type="checkbox"]):focus { outline: none; }
+.account-panel input:not([type="radio"]):not([type="checkbox"]):focus-visible { filter: brightness(0.96); }
 .account-hint { margin: 4px 0; min-height: 32px; font-size: 12px; line-height: 1.5; color: #607b90; }
 .account-status { margin: 8px 0; min-height: 32px; font-size: 14px; line-height: 1.4; color: #b33143; }
 .account-submit {
@@ -169,7 +170,8 @@ html, body {
     background: #17324d70; font-family: Rubik, Arial, sans-serif; color: #17324d;
 }
 .resident-dialogue {
-    position: relative; width: 760px; max-width: 100%; max-height: 100%; overflow-y: auto;
+    position: relative; width: 760px; max-width: 100%; max-height: 100%; overflow: visible;
+    display: flex; flex-direction: column;
     padding: 28px 34px; box-sizing: border-box; background: #f3faff;
     border: 4px solid #9bc5df; border-radius: 20px; text-align: center;
     box-shadow: 0 18px 60px #17324d30;
@@ -188,8 +190,14 @@ html, body {
 .resident-greeting { font-size: 17px; line-height: 1.8; margin: 0 0 24px; }
 .resident-dialogue button { cursor: pointer; transition: scale 0.16s ease; }
 .resident-dialogue button:hover { scale: 1.08; }
-.resident-close { position: absolute; top: 10px; left: 14px; width: 36px; padding: 0; border: 0; background: transparent; }
+.window-content { min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.resident-close { position: absolute; z-index: 2; top: -16px; left: -16px; width: 48px; padding: 0; border: 0; background: transparent; }
 .resident-close img { display: block; width: 100%; height: auto; }
+.resident-close img, .quest-action img { animation: window-button-float 2s ease-in-out infinite; }
+@keyframes window-button-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
 
 .rarity-dialogue { width: 760px; }
 .rarity-search { width: 100%; box-sizing: border-box; padding: 10px; border: 2px solid #b6d0e2; border-radius: 8px; font-size: 16px; }
@@ -200,6 +208,81 @@ html, body {
 .rarity-frame { width: 58px; height: 58px; background: url('/assets/ui/items-frames.png') 0 0 / 232px 58px no-repeat; image-rendering: pixelated; }
 .rarity-row select { padding: 8px; font-size: 18px; border: 2px solid #b6d0e2; border-radius: 8px; background: white; color: #17324d; }
 .rarity-status { min-height: 24px; }
+
+.snow-catch-dialogue { width: 860px; padding: 20px 30px; }
+.snow-catch-dialogue h2 { margin: 0 0 8px; }
+.snow-catch-hud { display: flex; justify-content: space-between; font-size: 20px; font-weight: 600; margin-bottom: 10px; }
+#game-container .snow-catch-canvas { width: min(100%, 82vh); height: auto; margin: 0 auto; aspect-ratio: 760 / 500; border: 3px solid #7199bd; border-radius: 14px; box-sizing: border-box; touch-action: none; image-rendering: auto; }
+.snow-help { font-size: 14px; line-height: 1.6; margin: 10px 0 5px; }
+.snow-result { min-height: 24px; font-size: 16px; line-height: 1.6; margin: 4px 0 8px; font-weight: 500; }
+.snow-actions { display: flex; justify-content: center; gap: 12px; }
+.snow-actions button { padding: 10px 28px; border: 2px solid #8bb9d6; border-radius: 12px; background: #3779a8; color: white; font-size: 18px; transition: scale 0.16s ease; }
+.snow-actions button:hover { scale: 1.05; }
+.snow-actions button:disabled { opacity: 0.6; cursor: wait; }
+.snow-actions [hidden] { display: none; }
+.snow-catch-canvas:focus-visible { outline: 3px solid #f1c75b; outline-offset: 2px; }
+
+.resident-quest-list { list-style: none; padding: 0 3px; margin: 0; }
+.resident-quests [hidden] { display: none; }
+.quest-chain-header h4 { margin: 8px 0 12px; font-size: 18px; }
+.quest-step { margin: 12px 0; padding: 12px; border: 2px solid #b6d0e2; border-radius: 12px; background: #f3faff; font-size: 14px; line-height: 1.6; }
+.quest-step p { margin: 6px 0; }
+.quest-active { border-color: #599dc5; background: white; }
+.quest-locked { opacity: 0.65; }
+.quest-claimed { border-color: #8eb7a4; }
+.quest-reward, .quest-complete { color: #346f54; font-weight: 500; }
+.quest-progress { color: #47728c; }
+.quest-action { box-sizing: border-box; max-width: 100%; padding: 8px 15px; border: 2px solid #8bb9d6; border-radius: 10px; background: #3779a8; color: white; font-size: 15px; white-space: normal; overflow-wrap: anywhere; transition: background-color 0.16s ease, border-color 0.16s ease; }
+.resident-quests button:hover, .quest-conversation button:not(.resident-close):hover { scale: 1; }
+.resident-dialogue .quest-action:not(:disabled):hover { scale: 1; background: #28658f; border-color: #599dc5; }
+.quest-action:disabled { opacity: 0.6; cursor: default; }
+.resident-dialogue .quest-action {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; min-height: 48px; margin: 6px 4px; padding: 0;
+    border: 0; border-radius: 0; background: transparent;
+}
+.quest-action img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.resident-dialogue .quest-action:not(:disabled):hover {
+    scale: 1.1; background: transparent; border: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+    .resident-close img, .quest-action img { animation: none; }
+}
+.quest-feedback { min-height: 22px; color: #aa3546; font-size: 14px; }
+
+.quest-entry { display: block; box-sizing: border-box; width: 100%; padding: 16px; text-align: right; font: inherit; color: #17324d; background: #f3faff; border: 2px solid #a5c8de; border-radius: 12px; cursor: pointer; }
+.resident-dialogue .quest-entry:hover { scale: 1; background: white; border-color: #599dc5; }
+.quest-entry p { font-size: 14px; line-height: 1.7; margin: 10px 0; }
+.quest-entry strong { display: block; font-size: 17px; }
+.quest-entry .quest-progress { font-size: 13px; }
+.quest-conversation-screen { z-index: 25; }
+.quest-conversation { width: 700px; text-align: right; }
+.quest-speaker { display: flex; align-items: center; gap: 20px; padding-left: 35px; }
+.quest-speaker img { height: 100px; width: auto; image-rendering: pixelated; }
+.quest-speaker h2 { margin: 0; }
+.quest-talk-title { color: #47728c; margin: 8px 0; }
+.quest-story { font-size: 18px; line-height: 1.9; white-space: pre-line; }
+.quest-objective { font-size: 14px; line-height: 1.8; color: #47728c; white-space: pre-line; }
+.quest-talk-reward { color: #346f54; font-weight: 600; line-height: 1.7; }
+.quest-talk-feedback { min-height: 22px; color: #aa3546; }
+.quest-talk-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.resident-quests, .quest-talk-actions > button { min-width: 0; }
+.quest-entry, .quest-story, .quest-objective, .quest-talk-reward { overflow-wrap: anywhere; }
+
+.quest-rewards-screen { z-index: 30; }
+.quest-rewards { width: 620px; text-align: center; }
+.quest-prizes { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; margin: 24px 0; }
+.quest-prize { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 140px; min-height: 170px; padding: 12px; box-sizing: border-box; border: 2px solid #a6c7dc; border-radius: 18px; background: #e3f2ff; animation: quest-prize-pop 480ms var(--reward-delay) both; }
+.quest-prize-symbol { font-size: 48px; color: #8e80cc; line-height: 1; }
+.quest-prize-coins { background: #d8f1ff; border-color: #68acd1; }
+.quest-prize-coins .quest-prize-symbol { color: #e5ae32; }
+.coin-icon { display: inline-block; object-fit: contain; vertical-align: middle; image-rendering: pixelated; }
+.quest-prize strong { font-size: 28px; }
+#game-container .quest-prize canvas { width: 96px; height: 96px; image-rendering: pixelated; }
+.quest-reward-actions { display: flex; justify-content: center; padding-top: 12px; }
+.quest-rewards button:not(.resident-close):hover { scale: 1; }
+@keyframes quest-prize-pop { 0% { opacity: 0; transform: scale(0.65) translateY(16px); } 70% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .quest-prize { animation: none; } }
 
 .loading-screen {
     position: absolute; inset: 0; z-index: 30;
@@ -234,6 +317,79 @@ html, body {
 }
 .loading-dots i:nth-child(2) { animation-delay: 0.15s; }
 .loading-dots i:nth-child(3) { animation-delay: 0.3s; }
+
+/* Shared 16px nine-slice frame: also used by Phaser inventory/catalog/player cards.
+   Keep corner pixels fixed as each window grows; never scale the entire frame. */
+.account-panel, .resident-dialogue, .loading-card, .game-window {
+    border: 4px solid transparent;
+    border-radius: 0;
+    border-image-source: url('assets/ui/window-frame.svg');
+    border-image-slice: 16 fill;
+    border-image-width: 16px;
+    border-image-repeat: stretch;
+    background: none;
+    box-shadow: none;
+    filter: drop-shadow(0 6px 0 #244d7040);
+}
+.loading-card { box-sizing: border-box; padding: 28px; }
+.registration-preview, .resident-quests, .resident-quests-empty,
+.quest-step, .quest-entry, .quest-prize { border-radius: 0; }
+.quest-conversation {
+    border: 4px solid transparent;
+    border-image-source: url('assets/ui/quest-window-frame.svg');
+    border-image-slice: 16 fill;
+    border-image-width: 16px;
+    border-image-repeat: stretch;
+    background: none;
+}
+.quest-conversation .quest-talk-title, .quest-conversation .quest-objective { color: #2d506b; }
+.resident-dialogue .quest-entry,
+.resident-quests,
+.registration-preview,
+.account-panel input:not([type="radio"]):not([type="checkbox"]),
+.game-chat-input {
+    border: 4px solid transparent;
+    border-radius: 0;
+    border-image: url('assets/ui/quest-entry-frame.svg') 4 fill / 4px / 0 stretch;
+    background: none;
+}
+.resident-dialogue .quest-entry:hover {
+    border-color: transparent;
+    background: none;
+    filter: brightness(1.04);
+}
+#game-container .snow-catch-canvas { border-radius: 0; }
+
+/* Keep the account frame in front of hovering controls, without an inner scrollbar. */
+.account-screen { overflow: auto; scrollbar-width: none; }
+.account-screen::-webkit-scrollbar { display: none; }
+.account-panel {
+    position: relative;
+    isolation: isolate;
+    margin: auto;
+    flex-shrink: 0;
+    max-height: none;
+    overflow: visible;
+}
+.account-panel::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    z-index: 3;
+    pointer-events: none;
+    border: 4px solid transparent;
+    border-image: url('assets/ui/window-frame.svg') 16 / 16px / 0 stretch;
+}
+.account-panel[data-mode="register"] header { margin-bottom: 10px; }
+.account-panel[data-mode="register"] .account-logo {
+    width: 260px;
+    max-height: 110px;
+    object-fit: contain;
+}
+.account-panel[data-mode="register"] .registration-preview { padding: 12px 16px; }
+.account-panel[data-mode="register"] .registration-preview p { margin: 10px 0 8px; }
+.account-panel[data-mode="register"] .registration-gender { margin-top: 10px; padding: 6px 10px; }
+
 @keyframes loading-dot { 0%, 100% { opacity: 0.35; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-5px); } }
 @media (prefers-reduced-motion: reduce) {
     .loading-logo, .loading-dots i { animation: none; }

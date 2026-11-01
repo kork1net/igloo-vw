@@ -145,7 +145,7 @@ export class MainMenu extends Scene {
             saveToken(result.token);
             this.registry.set('auth', result);
             this.registry.set('inventory', result.inventory);
-            this.scene.start('Game');
+            this.scene.start('Game', { fromRoom: 'MainMenu' });
         };
         tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
         root.addEventListener('click', event => {

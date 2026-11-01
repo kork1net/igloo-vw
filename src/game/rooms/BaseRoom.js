@@ -7,6 +7,7 @@ import { addButtonHover } from '../ui/ButtonHover';
 import { openWindow, closeWindow } from '../ui/WindowTransition';
 import { openRarityManager } from '../ui/RarityManager';
 import { layoutItemIcon } from '../ui/ItemIcon';
+import { addInventoryBackdrop } from '../ui/InventoryBackdrop';
 
 export class BaseRoom extends Scene {
     constructor(key) {
@@ -48,6 +49,7 @@ export class BaseRoom extends Scene {
 
         // Shared mouse movement
         this.input.on('pointerdown', (pointer, gameObjects) => {
+            if (this.snowGame || this.activeResident) return;
             if (gameObjects.length > 0) return;
 
             const now = this.time.now;
@@ -89,7 +91,7 @@ export class BaseRoom extends Scene {
 
         this.createChat();
         const logoutButton = this.add.image(this.scale.width - 10, 14, 'logout-symbol');
-        logoutButton.setScale(88 / logoutButton.height)
+        logoutButton.setScale(76 / logoutButton.height)
             .setOrigin(1, 0).setDepth(100).setScrollFactor(0)
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', () => {
@@ -125,6 +127,7 @@ export class BaseRoom extends Scene {
     }
 
     moveToRoom(sceneKey, x, y, run = false) {
+        if (this.activeResident || this.snowGame) return;
         this.pendingTransition = {
             sceneKey,
             x,
@@ -167,8 +170,18 @@ export class BaseRoom extends Scene {
             'assets/ui/send-button.png'
         );
         this.load.image('admin-symbol', 'assets/ui/admin-symbol.png');
+        this.load.image('quest-mark', 'assets/ui/quest-mark.png');
+        this.load.image('in-minigame-symbol', 'assets/ui/in-minigame-symbol.png');
         this.load.image('logout-symbol', 'assets/ui/logout-symbol.png');
         this.load.image('x-button', 'assets/ui/x-button.png');
+        this.load.image('coin-symbol', 'assets/ui/coin-symbol.png');
+        this.load.image('levelup-symbol', 'assets/ui/levelup-symbol.png');
+        this.load.spritesheet('levels-symbols', 'assets/ui/levels-symbols.png', {
+            frameWidth: 50, frameHeight: 50
+        });
+        this.load.svg('window-frame', 'assets/ui/window-frame.svg');
+        this.load.svg('quest-entry-frame', 'assets/ui/quest-entry-frame.svg');
+        this.load.svg('inventory-window-frame', 'assets/ui/inventory-window-frame.svg');
         this.load.spritesheet('items-frames', 'assets/ui/items-frames.png', {
             frameWidth: 116, frameHeight: 116
         });
@@ -210,6 +223,7 @@ export class BaseRoom extends Scene {
 
         // Create HTML input with fixed dimensions
         const input = document.createElement('input');
+        input.className = 'game-chat-input';
         input.type = 'text';
         input.placeholder = 'כתוב הודעה...';
         input.maxLength = 100;
@@ -218,14 +232,11 @@ export class BaseRoom extends Scene {
             width: `${inputWidth}px`,
             height: `${inputHeight}px`,
             boxSizing: 'border-box',
-            border: `${borderWidth}px solid #9bbbd2`,
-            borderRadius: '8px',
             padding: '0 12px',
             fontSize: '16px',
             fontFamily: 'Rubik, Arial, sans-serif',
             outline: 'none',
             direction: 'rtl',
-            backgroundColor: '#ffffff',
             color: '#17324d'
         });
 
@@ -353,25 +364,27 @@ export class BaseRoom extends Scene {
             event.stopPropagation();
             this.closePlayerCard();
         });
+        add(this.add.nineslice(centerX, centerY, 'window-frame', undefined, 400, 480, 16, 16, 16, 16));
         const background = add(this.add.rectangle(
-            centerX, centerY, 400, 420, 0x293443
-        ).setStrokeStyle(4, 0x8494a8).setInteractive());
+            centerX, centerY, 400, 480, 0x000000, 0
+        ).setInteractive());
         background.on('pointerdown', blockClick);
 
         const name = add(this.add.text(centerX, centerY - 155, remotePlayer.username, {
-            fontFamily: 'Rubik, Arial, sans-serif', fontSize: '26px', color: '#ffffff',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '30px',
+            fontStyle: 'bold', color: '#244d70', stroke: '#f3faff', strokeThickness: 3,
+            shadow: { offsetX: 2, offsetY: 2, color: '#68acd1', blur: 0, fill: true, stroke: false },
             align: 'center', wordWrap: { width: 290, useAdvancedWrap: true }
         }).setOrigin(0.5));
-        add(this.add.rectangle(
-            centerX, centerY + 25, 250, 270, 0x394b60
-        ).setStrokeStyle(2, 0x8798ab));
+        add(this.add.nineslice(centerX, centerY + 15, 'quest-entry-frame',
+            undefined, 250, 250, 4, 4, 4, 4));
         const previewBody = add(this.add.sprite(centerX, centerY + 115, 'player', 0)
             .setOrigin(0.5, 1).setScale(2.5));
         const clothing = new ClothingLayers(this, panel, centerX, centerY + 115, 2.5, previewBody, remotePlayer.gender);
         clothing.setEquipment(remotePlayer.equipped);
 
-        const close = add(this.add.image(centerX + 170, centerY - 180, 'x-button')
-            .setDisplaySize(42, 42 * 47 / 51).setInteractive({ useHandCursor: true }));
+        const close = add(this.add.image(centerX + 188, centerY - 228, 'x-button')
+            .setDisplaySize(48, 48 * 47 / 51).setInteractive({ useHandCursor: true }));
         close.on('pointerdown', (pointer, localX, localY, event) => {
             event.stopPropagation();
             this.sound.play('ui-close');
@@ -379,7 +392,9 @@ export class BaseRoom extends Scene {
         });
         this.addButtonHover(close);
 
-        this.playerCard = { panel, remotePlayer, name, clothing };
+        const levelBadge = add(this.add.image(centerX, centerY + 184, 'levels-symbols', 0)
+            .setDisplaySize(80, 80));
+        this.playerCard = { panel, remotePlayer, name, clothing, levelBadge };
         // Phaser DOM inputs otherwise stay above the canvas modal.
         this.chatInput?.setVisible(false);
         this.refreshPlayerCard();
@@ -388,12 +403,14 @@ export class BaseRoom extends Scene {
 
     refreshPlayerCard() {
         if (!this.playerCard) return;
-        const { remotePlayer, name, clothing } = this.playerCard;
+        const { remotePlayer, name, clothing, levelBadge } = this.playerCard;
         if (![...this.multiplayer.remotePlayers.values()].includes(remotePlayer)) {
             this.closePlayerCard();
             return;
         }
         name.setText(remotePlayer.username);
+        const level = Math.max(1, Math.min(3, remotePlayer.level || 1));
+        levelBadge.setFrame(level - 1);
         clothing.setEquipment(remotePlayer.equipped);
     }
 
@@ -420,7 +437,7 @@ export class BaseRoom extends Scene {
         this.inventoryWindow = panel;
         const add = object => { panel.add(object); return object; };
         const text = (x, y, value, size = 17) => add(this.add.text(x, y, value, {
-            fontFamily: 'Rubik, Arial, sans-serif', fontSize: `${size}px`, color: '#ffffff',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: `${size}px`, color: '#17324d',
             align: 'center'
         }).setOrigin(0.5));
         const reopen = (nextPage = 0) => {
@@ -431,11 +448,14 @@ export class BaseRoom extends Scene {
         const stopClick = (pointer, localX, localY, event) => event.stopPropagation();
         const overlay = add(this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.45)
             .setInteractive()).on('pointerdown', stopClick);
-        add(this.add.rectangle(centerX, centerY, 860, 500, 0x293443)
-            .setStrokeStyle(4, 0x8494a8).setInteractive()).on('pointerdown', stopClick);
-        text(centerX, centerY - 214, this.catalogOpen ? 'קטלוג החנות' : 'תיק חפצים', 26);
+        add(this.add.nineslice(centerX, centerY, this.catalogOpen ? 'window-frame' : 'inventory-window-frame',
+            undefined, 860, 620, 16, 16, 16, 16));
+        if (!this.catalogOpen) addInventoryBackdrop(this, panel, centerX, centerY);
+        add(this.add.rectangle(centerX, centerY, 860, 620, 0x000000, 0)
+            .setInteractive()).on('pointerdown', stopClick);
+        if (this.catalogOpen) text(centerX, centerY - 214, 'קטלוג החנות', 26);
         if (this.registry.get('auth')?.user?.isAdmin) {
-            const manage = text(centerX - 280, centerY - 214, 'ניהול נדירות', 17)
+            const manage = text(centerX - 280, centerY - (this.catalogOpen ? 214 : 260), 'ניהול נדירות', 17)
                 .setInteractive({ useHandCursor: true });
             this.addButtonHover(manage);
             manage.on('pointerdown', (pointer, localX, localY, event) => {
@@ -444,8 +464,9 @@ export class BaseRoom extends Scene {
                 openRarityManager(this);
             });
         }
-        const close = add(this.add.image(centerX + 392, centerY - 214, 'x-button')
-            .setDisplaySize(42, 42 * 47 / 51).setInteractive({ useHandCursor: true }));
+        const close = add(this.add.image(centerX + 418, centerY - 298, 'x-button')
+            .setInteractive({ useHandCursor: true }));
+        close.setScale(56 / close.width);
         this.addButtonHover(close);
         close.on('pointerdown', (pointer, localX, localY, event) => {
             event.stopPropagation();
@@ -454,8 +475,8 @@ export class BaseRoom extends Scene {
         });
 
         inventoryCategories.forEach((entry, index) => {
-            const x = centerX + 380 - index * 80;
-            const button = add(this.add.image(x, centerY - 153, 'inventory-symbols', index)
+            const x = centerX + 360 - index * 80;
+            const button = add(this.add.image(x, centerY - (this.catalogOpen ? 153 : 220), 'inventory-symbols', index)
                 .setDisplaySize(76, 76).setData('categoryId', entry.id)
                 .setInteractive({ useHandCursor: true }));
             if (entry.id === category.id) {
@@ -474,9 +495,13 @@ export class BaseRoom extends Scene {
         });
 
         const previewX = centerX - 280;
-        add(this.add.rectangle(previewX, centerY + 20, 230, 310, 0x394b60)
-            .setStrokeStyle(2, 0x8798ab));
-        text(previewX, centerY - 108, this.player.username, 19);
+        add(this.add.nineslice(previewX, centerY + 20, 'window-frame',
+            undefined, 230, 310, 16, 16, 16, 16));
+        const previewName = text(previewX, centerY - 105, this.player.username, 24).setStyle({
+            fontStyle: 'bold', color: '#244d70', stroke: '#f3faff', strokeThickness: 3,
+            shadow: { offsetX: 2, offsetY: 2, color: '#68acd1', blur: 0, fill: true, stroke: false }
+        });
+        if (previewName.width > 190) previewName.setScale(190 / previewName.width);
         const previewBody = add(this.add.sprite(previewX, centerY + 115, 'player', 0)
             .setOrigin(0.5, 1).setScale(2.5));
         const clothing = new ClothingLayers(this, panel, previewX, centerY + 115, 2.5, previewBody, this.player.gender);
@@ -491,18 +516,33 @@ export class BaseRoom extends Scene {
                 });
             }
         }
-        text(previewX, centerY + 153, `${inventory.currency.toLocaleString()} מטבעות`, 17).setColor('#ffdb79');
+        const metricStyle = { fontStyle: 'bold', color: '#244d70', stroke: '#f3faff', strokeThickness: 2,
+            shadow: { offsetX: 1, offsetY: 1, color: '#68acd1', blur: 0, fill: true, stroke: false } };
+        const balance = text(previewX + 22, centerY - 174, inventory.currency.toLocaleString(), 34).setStyle(metricStyle);
+        if (balance.width > 160) balance.setScale(160 / balance.width);
+        add(this.add.image(previewX - balance.displayWidth / 2 - 12, centerY - 174, 'coin-symbol').setDisplaySize(48, 48 * 50 / 48));
+        const level = Math.max(1, Math.min(3, inventory.level || 1));
+        add(this.add.image(previewX - 84, centerY + 224, 'levels-symbols', level - 1)
+            .setDisplaySize(96, 96));
+        const rankingText = text(previewX + 70, centerY + 210, (inventory.rankingPoints || 0).toLocaleString(), 32)
+            .setStyle(metricStyle);
+        if (rankingText.width > 100) rankingText.setScale(100 / rankingText.width);
+        add(this.add.image(previewX + 70 - rankingText.displayWidth / 2 - 33, centerY + 210, 'levelup-symbol')
+            .setDisplaySize(44, 44 * 56 / 51));
+        text(previewX + 54, centerY + 239, level < 3
+            ? `עוד ${(inventory.pointsToNextLevel || 0).toLocaleString()} נק׳ לדרגה הבאה`
+            : 'הדרגה המרבית', 21).setStyle(metricStyle).setWordWrapWidth(170, true).setOrigin(0.5, 0);
 
-        const pageSize = 6;
+        const pageSize = this.catalogOpen ? 6 : 9;
         const pages = Math.max(1, Math.ceil(items.length / pageSize));
         this.inventoryPage = Math.max(0, Math.min(page, pages - 1));
         if (!items.length) {
-            text(centerX + 100, centerY + 10, 'אין כרגע פריטים בקטגוריה זו', 16);
+            text(centerX + 80, centerY + 10, 'אין כרגע פריטים בקטגוריה זו', 16);
         }
         items.slice(this.inventoryPage * pageSize, (this.inventoryPage + 1) * pageSize)
             .forEach((item, index) => {
-                const x = centerX + 270 - (index % 3) * 140;
-                const y = centerY - 45 + Math.floor(index / 3) * 145;
+                const x = centerX + 250 - (index % 3) * 140;
+                const y = centerY - (this.catalogOpen ? 45 : 100) + Math.floor(index / 3) * 145;
                 const owned = inventory.items.includes(item.id);
                 const selected = (this.catalogOpen ? this.catalogPreviewEquipment : inventory.equipped)?.[item.slot] === item.id;
                 const rarity = this.registry.get('itemRarities')?.[item.id] || 'C';
@@ -525,11 +565,12 @@ export class BaseRoom extends Scene {
                     const buyButton = add(this.add.rectangle(x, y + 73, 116, 26,
                         owned ? 0x394b60 : 0x3779a8).setStrokeStyle(1, 0x8798ab));
                     buyButton.setData('purchaseItemId', item.id);
-                    const buyLabel = text(x, y + 73, owned ? 'ברשותך' : `קנייה · ${price} מטבעות`, 12)
+                    const buyLabel = text(x + (owned ? 0 : 10), y + 73, owned ? 'ברשותך' : `קנייה · ${price}`, 12)
                         .setColor(owned ? '#b2e49b' : '#ffffff');
+                    const coin = !owned ? add(this.add.image(x - 43, y + 73, 'coin-symbol').setDisplaySize(20, 20 * 50 / 48)) : null;
                     if (!owned) {
                         buyButton.setInteractive({ useHandCursor: true });
-                        this.addButtonHover(buyButton, [buyButton, buyLabel]);
+                        this.addButtonHover(buyButton, [buyButton, buyLabel, coin]);
                         buyButton.on('pointerdown', (pointer, localX, localY, event) => {
                             event.stopPropagation();
                             this.sound.play('inventory-click');
@@ -550,9 +591,10 @@ export class BaseRoom extends Scene {
                 });
             });
         if (pages > 1) {
-            text(centerX + 100, centerY + 212, `${this.inventoryPage + 1} / ${pages}`, 16);
+            const pageY = centerY + (this.catalogOpen ? 212 : 270);
+            text(centerX + 80, pageY, `${this.inventoryPage + 1} / ${pages}`, 16);
             for (const [offset, label, change] of [[-80, '<', -1], [80, '>', 1]]) {
-                const control = text(centerX + 100 + offset, centerY + 212, label, 23)
+                const control = text(centerX + 80 + offset, pageY, label, 23)
                     .setInteractive({ useHandCursor: true });
                 this.addButtonHover(control);
                 control.on('pointerdown', () => {
@@ -613,7 +655,7 @@ export class BaseRoom extends Scene {
         this.itemNotice?.destroy();
         this.itemNoticeTimer?.remove();
         this.itemNotice = this.add.text(this.scale.width / 2, this.scale.height - 110, message, {
-            fontFamily: 'Rubik, Arial, sans-serif', fontSize: '17px', color: '#ffffff',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '17px', color: '#ffffff',
             backgroundColor: '#17324d', padding: { x: 16, y: 10 },
             align: 'center', wordWrap: { width: 500 }
         }).setOrigin(0.5).setDepth(300).setScrollFactor(0);
@@ -627,6 +669,7 @@ export class BaseRoom extends Scene {
 
     updateRoom(delta) {
         if (!this.player) return;
+        if (this.snowGame || this.activeResident) { this.multiplayer?.update(delta); return; }
         if (this.multiplayer?.backgroundControlled) return;
 
         // Update player movement first
@@ -648,7 +691,7 @@ export class BaseRoom extends Scene {
         // Transition once the player reaches the entrance
         if (distance <= 8) {
             this.pendingTransition = null;
-            this.scene.start(sceneKey);
+            this.scene.start(sceneKey, { fromRoom: this.sys.settings.key });
         }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "width": 1280,
+  "shop": {
+    "xRatio": 0.17,
+    "y": 380,
+    "scale": 1.1,
+    "width": 325,
+    "height": 325,
+    "depthRatio": 0.86,
+    "wallLeft": 40,
+    "wallRight": 305,
+    "doorLeft": 161,
+    "doorRight": 213
+  }
+}

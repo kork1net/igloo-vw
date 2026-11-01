@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
+const economy = require('../server/economy.json');
 const { Inventories } = require('../server/inventory.cjs');
 const { buildCatalog } = require('../scripts/item-catalog.cjs');
 
@@ -17,7 +18,7 @@ try {
     const blue = 'body-color/blue';
     const first = store.snapshot(user, catalog);
     assert.deepEqual(first.items, [white]);
-    assert.equal(first.currency, 1000);
+    assert.equal(first.currency, economy.startingCurrency);
     assert.equal(first.equipped.bodyColor, white);
     assert.equal(first.equipped.shirt, null);
     assert.throws(() => store.equip(user, shirt, true, catalog), /בבעלותך/);
@@ -25,15 +26,15 @@ try {
     assert.throws(() => store.purchase(user, 'nonexistent', catalog));
     store.purchase(user, shirt, catalog);
     store.purchase(user, blue, catalog);
-    assert.equal(store.snapshot(user, catalog).currency, 980);
+    assert.equal(store.snapshot(user, catalog).currency, economy.startingCurrency - 2 * economy.itemPrice);
     assert.throws(() => store.purchase(user, shirt, catalog), /כבר/);
-    assert.equal(store.snapshot(user, catalog).currency, 980);
+    assert.equal(store.snapshot(user, catalog).currency, economy.startingCurrency - 2 * economy.itemPrice);
     store.equip(user, shirt, true, catalog);
     store.equip(user, blue, true, catalog);
     const saved = new Inventories(directory).snapshot(user, catalog);
     assert.equal(saved.equipped.shirt, shirt);
     assert.equal(saved.equipped.bodyColor, blue);
-    assert.equal(saved.currency, 980);
+    assert.equal(saved.currency, economy.startingCurrency - 2 * economy.itemPrice);
     assert.equal(saved.items.length, 3);
     assert.deepEqual(store.snapshot(other, catalog).items, [white]);
 
@@ -51,7 +52,7 @@ try {
     const withoutShirt = { ...catalog, items: catalog.items.filter(item => item.id !== shirt) };
     assert.equal(store.snapshot(user, withoutShirt).equipped.shirt, null);
     assert.equal(store.snapshot(user, catalog).equipped.shirt, shirt);
-    assert.equal(store.shopCatalog(catalog).length, 24);
+    assert.equal(store.shopCatalog(catalog).length, 28);
     assert.ok(store.shopCatalog(catalog).every(item => item.price === 10));
     assert.ok(store.shopCatalog(catalog).some(item => item.id === white));
     for (const id of ['shirt/red-dress', 'shirt/red-dress--blue', 'shirt/red-dress--green', 'shirt/red-dress--purple']) {
@@ -63,7 +64,7 @@ try {
     assert.deepEqual(store.snapshot(coloredUser, catalog).items, ['body-color/mint']);
     assert.equal(store.snapshot(coloredUser, catalog).equipped.bodyColor, 'body-color/mint');
     store.purchase(coloredUser, white, catalog);
-    assert.equal(store.snapshot(coloredUser, catalog).currency, 990);
+    assert.equal(store.snapshot(coloredUser, catalog).currency, economy.startingCurrency - economy.itemPrice);
     assert.equal(new Inventories(directory).snapshot(coloredUser, catalog).equipped.bodyColor, 'body-color/mint');
 
     store.persist(other, { ...store.load(other), currency: 9 });

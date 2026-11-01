@@ -35,6 +35,16 @@ export function closeWindow(scene, panel, animate = true) {
 }
 
 export function openHtmlWindow(overlay) {
+    // Scroll the contents rather than the frame, so corner buttons can protrude.
+    const dialog = overlay.querySelector('[role="dialog"]');
+    if (!dialog.querySelector(':scope > .window-content')) {
+        const content = document.createElement('div');
+        content.className = 'window-content';
+        for (const child of [...dialog.childNodes]) {
+            if (child.nodeType !== 1 || !child.classList.contains('resident-close')) content.append(child);
+        }
+        dialog.append(content);
+    }
     if (reducedMotion()) return;
     overlay.windowAnimation = overlay.querySelector('[role="dialog"]').animate([
         { transform: 'translateY(-100vh)' },

@@ -12,7 +12,7 @@ export function showChatMessage(owner, message) {
     clearChatMessage(owner);
 
     const bubbleText = owner.scene.add.text(0, 0, text, {
-        fontFamily: 'Rubik, Arial, sans-serif',
+        fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
         fontSize: '16px',
         color: '#17324d',
         align: 'center',

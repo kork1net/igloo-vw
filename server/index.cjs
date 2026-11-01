@@ -4,6 +4,11 @@ const { Server } = require('socket.io');
 const { buildCatalog } = require('../scripts/item-catalog.cjs');
 const { Accounts, handleAccountSocket } = require('./accounts.cjs');
 const accounts = new Accounts(process.env.VW_ACCOUNTS_FILE);
+const { getShopColliders, resolveMovement } = require('../shared/collision.js');
+const square = require('../shared/square.json');
+const squareColliders = getShopColliders(square);
+const { SnowGames } = require('./snow-game.cjs');
+const snowGames = new SnowGames();
 const { Rarities } = require('./rarities.cjs');
 const rarities = new Rarities(process.env.VW_RARITIES_FILE
     || (process.env.VW_ACCOUNTS_FILE ? process.env.VW_ACCOUNTS_FILE + '.rarities.json' : undefined));
@@ -41,6 +46,9 @@ function pushInventory(user) {
         if (player.userId !== user.id) continue;
         player.equipped = inventory.equipped;
         player.shirt = inventory.equipped.shirt;
+        player.level = inventory.level;
+        player.rankingPoints = inventory.rankingPoints;
+        player.pointsToNextLevel = inventory.pointsToNextLevel;
         io.to(player.room).emit('playerMoved', { ...player });
     }
     return inventory;
@@ -90,14 +98,84 @@ io.on('connection', (socket) => {
         gender: user.gender === 'female' ? 'female' : 'male',
         isAdmin: user.isAdmin === true,
         equipped: inventory.equipped,
+        level: inventory.level,
+        rankingPoints: inventory.rankingPoints,
+        pointsToNextLevel: inventory.pointsToNextLevel,
         shirt: inventory.equipped.shirt,
         direction: 0,
         facingLeft: false,
         isRunning: false,
-        isMoving: false
+        isMoving: false,
+        minigame: null
     });
     socket.emit('inventoryUpdated', inventory);
     socket.emit('itemRaritiesUpdated', rarities.snapshot());
+    const setMinigame = game => {
+        const player = players.get(socket.id);
+        if (!player || player.minigame === game) return;
+        player.minigame = game;
+        io.to(room).emit('playerMoved', { ...player });
+    };
+    socket.on('minigame:presence', (request, reply) => {
+        if (typeof reply !== 'function') return;
+        if (room !== 'Game' || request?.game !== 'snow-catch' || typeof request.active !== 'boolean') {
+            reply({ ok: false, error: 'משחקון לא תקין.' }); return;
+        }
+        setMinigame(request.active ? request.game : null);
+        reply({ ok: true });
+    });
+    let snowTimer = null;
+    const stopSnowTimer = () => { if (snowTimer) clearInterval(snowTimer); snowTimer = null; };
+    const snowState = () => {
+        const round = snowGames.get(user.id, socket.id);
+        let state = round.snapshot();
+        if (state.phase === 'finished') {
+            if (!round.result) {
+                round.result = inventories.rewardSnow(user, round);
+                pushInventory(user);
+            }
+            state = round.snapshot();
+            stopSnowTimer();
+        }
+        return state;
+    };
+    for (const action of ['snow:start', 'snow:state', 'snow:cancel']) {
+        socket.on(action, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            if (room !== 'Game') { reply({ ok: false, error: 'המשחק זמין בכיכר הראשית בלבד.' }); return; }
+            try {
+                if (action === 'snow:cancel') {
+                    if (request?.id && snowGames.get(user.id, socket.id).id !== request.id) {
+                        reply({ ok: true }); return;
+                    }
+                    snowGames.cancel(user.id, socket.id);
+                    stopSnowTimer();
+                    setMinigame(null);
+                    reply({ ok: true });
+                    return;
+                }
+                if (action === 'snow:start') {
+                    const round = snowGames.start(user.id, socket.id);
+                    if (round.questStepId === undefined) round.questStepId = inventories.currentQuestStep(user);
+                    setMinigame('snow-catch');
+                    stopSnowTimer();
+                    snowTimer = setInterval(() => {
+                        try { socket.emit('snow:update', snowState()); }
+                        catch { socket.emit('snow:error', 'לא ניתן לשמור את התוצאה. לחצו על בדיקת תוצאה כדי לנסות שוב.'); stopSnowTimer(); }
+                    }, 100);
+                    snowTimer.unref?.();
+                }
+                reply({ ok: true, state: snowState() });
+            } catch (error) { reply({ ok: false, error: error.code ? 'לא ניתן לשמור את התוצאה. נסו שוב.' : error.message }); }
+        });
+    }
+    socket.on('snow:input', request => {
+        try {
+            const round = snowGames.get(user.id, socket.id);
+            if (request?.id === round.id) round.input(request.x);
+        } catch { /* A stale input from a closed round is ignored. */ }
+    });
+    socket.on('disconnect', () => { stopSnowTimer(); snowGames.cancel(user.id, socket.id); });
     for (const action of ['admin:items', 'admin:setItemRarity']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
@@ -136,6 +214,21 @@ io.on('connection', (socket) => {
                 ? error.message : 'לא ניתן לשמור את השינוי. נסו שוב.' });
         }
     };
+    for (const action of ['quest:accept', 'quest:claim']) {
+        socket.on(action, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            let questReward;
+            inventoryAction(() => {
+                if (room !== 'Game') throw new InventoryError('חזרו לשוטר ליאו בכיכר כדי לקבל את הפרס.');
+                if (action === 'quest:accept') inventories.acceptQuest(user, request?.chainId, getCatalog());
+                else {
+                    const step = inventories.snapshot(user, getCatalog()).quests?.[request?.chainId]?.steps?.find(entry => entry.id === request?.stepId);
+                    inventories.claimQuest(user, request?.chainId, request?.stepId, getCatalog());
+                    questReward = { coins: step.coins, rankingPoints: step.rankingPoints, itemId: step.itemReward || null };
+                }
+            }, result => reply({ ...result, ...(result.ok && questReward ? { questReward } : {}) }));
+        });
+    }
     socket.on('inventory:equip', (request, acknowledge) => inventoryAction(() => {
         if (!request || typeof request.itemId !== 'string' || typeof request.equip !== 'boolean') {
             throw new InventoryError('בקשת לבישה לא תקינה.');
@@ -189,8 +282,12 @@ io.on('connection', (socket) => {
 
         if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
 
-        player.x = position.x;
-        player.y = position.y;
+        const destination = room === 'Game' ? resolveMovement(player, {
+            x: Math.max(25, Math.min(1255, position.x)),
+            y: Math.max(25, Math.min(695, position.y))
+        }, squareColliders) : position;
+        player.x = destination.x;
+        player.y = destination.y;
         player.direction = Number.isInteger(position.direction) && position.direction >= 0 && position.direction <= 6 ? position.direction : player.direction;
         player.facingLeft = Boolean(position.facingLeft);
         player.isMoving = Boolean(position.isMoving);
@@ -210,6 +307,7 @@ io.on('connection', (socket) => {
         const delta = Math.max(0, now - background.updatedAt) / 1000;
         background.updatedAt = now;
         const target = background.target;
+        const previous = { x: player.x, y: player.y };
         if (target) {
             const dx = target.x - player.x;
             const dy = target.y - player.y;
@@ -229,6 +327,16 @@ io.on('connection', (socket) => {
         } else {
             player.isMoving = false;
             player.isRunning = false;
+        }
+        if (room === 'Game') {
+            const resolved = resolveMovement(previous, player, squareColliders);
+            player.x = resolved.x;
+            player.y = resolved.y;
+            if (target && delta > 0 && Math.hypot(player.x - previous.x, player.y - previous.y) < 0.01) {
+                background.target = null;
+                player.isMoving = false;
+                player.isRunning = false;
+            }
         }
         socket.to(room).emit('playerMoved', { ...player });
         socket.emit('backgroundState', { ...player });

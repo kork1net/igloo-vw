@@ -9,7 +9,7 @@ export const residents = [
         displayHeight: 148,
         position: { x: 0.65, y: 0.6 },
         greeting: 'שלום! אני ליאו, השוטר של האזור. אני כאן כדי לשמור על הסדר ולעזור לתושבים. נעים להכיר!',
-        questChainIds: [],
+        questChainIds: ['leo-welcome'],
         speechLines: [
             '.יום שקט הוא יום מוצלח בשביל שוטר',
             '.צריכים עזרה? אני כאן בשבילכם',

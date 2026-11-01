@@ -7,15 +7,18 @@ export const inventoryCategories = [
     { id: 'bodyColor', name: 'צבע שחקן', slots: ['bodyColor'] },
     { id: 'hat', name: 'כובעים', slots: ['hat'] },
     { id: 'hair', name: 'שיער', slots: ['hair'] },
-    { id: 'accessory', name: 'אקססוריז', slots: ['accessory'] },
+    { id: 'accessory', name: 'אקססוריז', slots: ['accessory', 'necklace', 'glasses'] },
     { id: 'shirt', name: 'חולצות', slots: ['shirt', 'jacket'] },
     { id: 'pants', name: 'מכנסיים', slots: ['pants'] },
     { id: 'shoes', name: 'נעליים', slots: ['shoes'] }
 ];
 
 export function normalizeEquipment(equipped) {
-    return Object.fromEntries(clothingSlots.map(slot => [slot,
-        getClothingItem(equipped?.[slot])?.slot === slot ? equipped[slot] : null]));
+    return Object.fromEntries(clothingSlots.map(slot => {
+        const legacy = ['necklace', 'glasses'].includes(slot) ? equipped?.accessory : null;
+        const id = equipped?.[slot] ?? legacy;
+        return [slot, getClothingItem(id)?.slot === slot ? id : null];
+    }));
 }
 
 export function loadClothing(scene) {
@@ -115,6 +118,8 @@ export class ClothingLayers {
             if (sprite) this.container.bringToTop(sprite);
         }
         if (this.eyelashes) this.container.bringToTop(this.eyelashes);
+        const glasses = this.sprites.get('glasses');
+        if (glasses?.visible) this.container.bringToTop(glasses);
     }
 
     update(direction = 0, facingLeft = false, offsetX = 0, bodyTexture = 'player') {

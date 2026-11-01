@@ -1,0 +1,17 @@
+[
+  { "level": 1, "minPoints": 0 },
+  { "level": 2, "minPoints": 100 },
+  { "level": 3, "minPoints": 260 },
+  { "level": 4, "minPoints": 520 },
+  { "level": 5, "minPoints": 940 },
+  { "level": 6, "minPoints": 1610 },
+  { "level": 7, "minPoints": 2680 },
+  { "level": 8, "minPoints": 4390 },
+  { "level": 9, "minPoints": 7130 },
+  { "level": 10, "minPoints": 11510 },
+  { "level": 11, "minPoints": 18520 },
+  { "level": 12, "minPoints": 29740 },
+  { "level": 13, "minPoints": 47690 },
+  { "level": 14, "minPoints": 76410 },
+  { "level": 15, "minPoints": 122360 }
+]

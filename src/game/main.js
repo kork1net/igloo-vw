@@ -47,35 +47,28 @@ const StartGame = (parent) => {
         if (!canvas) return;
 
         const dpr = window.devicePixelRatio || 1;
-
-        const maxScale = Math.min(
-            window.innerWidth * dpr / config.width,
-            window.innerHeight * dpr / config.height
+        const fitScale = Math.min(
+            window.innerWidth / config.width,
+            window.innerHeight / config.height
         );
+        const physicalScale = fitScale * dpr;
+        const sharpScale = physicalScale >= 1
+            ? Math.floor(physicalScale) : 1 / Math.ceil(1 / physicalScale);
 
-        // 1 = maximum sharpness
-        // 0 = maximum screen coverage
-        const sharpness = 1;
-
-        const pixelPerfectScale =
-            maxScale >= 1
-                ? Math.floor(maxScale)
-                : 1 / Math.ceil(1 / maxScale);
-
-        const physicalScale =
-            pixelPerfectScale +
-            (maxScale - pixelPerfectScale) * (1 - sharpness);
-
-        game.scale.setZoom(physicalScale / dpr);
+        // Preserve pixel-aligned sizing in both browser modes.
+        game.scale.setZoom(sharpScale / dpr);
+        canvas.style.imageRendering = 'pixelated';
     }
 
     game.events.once('ready', () => {
         updateCanvasDisplay();
         window.addEventListener('resize', updateCanvasDisplay);
+        document.addEventListener('fullscreenchange', updateCanvasDisplay);
     });
 
     game.events.once('destroy', () => {
         window.removeEventListener('resize', updateCanvasDisplay);
+        document.removeEventListener('fullscreenchange', updateCanvasDisplay);
     });
 
     return game;

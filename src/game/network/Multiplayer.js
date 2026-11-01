@@ -4,6 +4,7 @@ import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
 import { io } from 'socket.io-client';
 import { SERVER_URL, saveToken } from './Auth';
 import { createAdminBadge } from '../objects/AdminBadge';
+import { createMinigameBadge } from '../objects/MinigameBadge';
 
 class RemotePlayer {
     constructor(scene, data) {
@@ -17,6 +18,9 @@ class RemotePlayer {
         this.isMoving = Boolean(data.isMoving);
         this.isRunning = Boolean(data.isRunning);
         this.username = data.username || 'Player';
+        this.level = Math.max(1, Math.min(3, data.level || 1));
+        this.rankingPoints = data.rankingPoints ?? 0;
+        this.pointsToNextLevel = data.pointsToNextLevel ?? 0;
         this.gender = data.gender === 'female' ? 'female' : 'male';
         this.equipped = normalizeEquipment(data.equipped || { shirt: data.shirt });
         this.walkTimer = 0;
@@ -29,7 +33,7 @@ class RemotePlayer {
         this.body.setOrigin(0.5, 1);
 
         this.nameText = scene.add.text(0, 37, this.username, {
-            fontFamily: 'Rubik, Arial, sans-serif',
+            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontStyle: 'bold',
             fontSize: '17px',
             color: '#17324d',
@@ -39,6 +43,7 @@ class RemotePlayer {
 
         this.container.add([shadow, this.body, this.nameText]);
         this.adminBadge = createAdminBadge(scene, this.container, data.isAdmin);
+        this.minigameBadge = createMinigameBadge(scene, this.container).setVisible(Boolean(data.minigame));
         this.clothing = new ClothingLayers(scene, this.container, 0, 24, 1, this.body, this.gender);
         this.clothing.setEquipment(this.equipped);
         this.container.setDepth(10);
@@ -57,6 +62,10 @@ class RemotePlayer {
     }
 
     setState(data) {
+        if (Number.isInteger(data.level)) this.level = Math.max(1, Math.min(3, data.level));
+        if (Number.isFinite(data.rankingPoints)) this.rankingPoints = data.rankingPoints;
+        if (Number.isFinite(data.pointsToNextLevel)) this.pointsToNextLevel = data.pointsToNextLevel;
+        this.minigameBadge.setVisible(Boolean(data.minigame));
         this.adminBadge.setVisible(data.isAdmin === true);
         this.targetX = data.x ?? this.targetX;
         this.targetY = data.y ?? this.targetY;
@@ -167,6 +176,8 @@ export default class Multiplayer {
         this.scene.registry.set('inventory', inventory);
         if (!this.scene.sys.isActive()) return;
         this.scene.player?.setEquipment(inventory.equipped);
+        for (const resident of this.scene.residents?.values() || []) resident.refreshQuestMarker();
+        this.scene.activeResident?.refreshQuests();
         if (this.scene.inventoryWindow) {
             this.scene.inventoryWindow.destroy();
             this.scene.inventoryWindow = null;
@@ -199,6 +210,8 @@ export default class Multiplayer {
 
         this.socket.on('authRequired', () => this.leaveAccount());
         this.socket.on('inventoryUpdated', inventory => this.applyInventory(inventory));
+        this.socket.on('snow:update', state => this.scene.snowGame?.applyState(state));
+        this.socket.on('snow:error', message => this.scene.snowGame?.error(message));
         this.socket.on('itemRaritiesUpdated', values => {
             this.scene.registry.set('itemRarities', values);
             if (this.scene.sys.isActive() && this.scene.inventoryWindow) {
@@ -220,12 +233,14 @@ export default class Multiplayer {
             this.syncLocalProfile();
             if (document.hidden) this.syncVisibility();
             else this.backgroundControlled = false;
+            if (this.scene.snowGame && !this.scene.snowGame.closing) this.requestInventory('minigame:presence', { game: 'snow-catch', active: true }).catch(() => {});
         });
 
         this.socket.on('backgroundState', state => this.applyBackgroundState(state));
 
         this.socket.on('currentPlayers', (players) => {
             this.scene.player.setAdmin(players[this.socket.id]?.isAdmin);
+            this.scene.player.setMinigame(players[this.socket.id]?.minigame);
             for (const [id, data] of Object.entries(players)) {
                 if (id !== this.socket.id) {
                     this.addRemotePlayer(id, data);
@@ -241,7 +256,7 @@ export default class Multiplayer {
 
         this.socket.on('playerMoved', (data) => {
             if (!data || !data.id) return;
-            if (data.id === this.socket.id) return;
+            if (data.id === this.socket.id) { this.scene.player.setMinigame(data.minigame); return; }
 
             if (!this.remotePlayers.has(data.id)) {
                 this.addRemotePlayer(data.id, data);

@@ -5,14 +5,26 @@
     "pants",
     "shirt",
     "jacket",
+    "necklace",
     "hair",
     "hat",
-    "accessory"
+    "accessory",
+    "glasses"
   ],
   "items": [
     {
+      "id": "accessory/black-sun-glasses",
+      "slot": "glasses",
+      "name": "black-sun-glasses",
+      "texture": "clothing:accessory/black-sun-glasses",
+      "path": "assets/items/accessory/black-sun-glasses.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
       "id": "accessory/golden-necklace",
-      "slot": "accessory",
+      "slot": "necklace",
       "name": "golden-necklace",
       "texture": "clothing:accessory/golden-necklace",
       "path": "assets/items/accessory/golden-necklace.png",
@@ -103,6 +115,53 @@
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "hat/green-hat1",
+      "slot": "hat",
+      "name": "כובע מצחייה ירוק",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hat/green-hat1--blue",
+      "slot": "hat",
+      "name": "כובע מצחייה כחול",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": 100
+    },
+    {
+      "id": "hat/green-hat1--burgundy",
+      "slot": "hat",
+      "name": "כובע מצחייה בורדו",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": -130,
+      "tint": 11579568
+    },
+    {
+      "id": "hat/green-hat1--purple",
+      "slot": "hat",
+      "name": "כובע מצחייה סגול",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": 160
     },
     {
       "id": "pants/blue-jeans",
