@@ -1,6 +1,21 @@
+export function addLevelBadgePulse(scene, badge) {
+    if (typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const pulse = scene.tweens.add({
+        targets: badge,
+        scaleX: badge.scaleX * 1.08,
+        scaleY: badge.scaleY * 1.08,
+        duration: 1100,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1
+    });
+    badge.once('destroy', () => pulse.stop());
+}
+
 export function addRankingEffect(scene, panel, x, y, level) {
     const tweens = [];
-    const color = level === 3 ? 0xd4b8ff : 0xb5eaff;
+    const color = level >= 3 ? 0xd4b8ff : 0xb5eaff;
     const halo = scene.add.graphics().setPosition(x - 84, y + 224);
     halo.fillStyle(color, 0.16);
     halo.fillRect(-46, -34, 92, 68);

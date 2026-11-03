@@ -1,3 +1,5 @@
+import rankSettings from '../../../shared/rank-settings.json';
+import { openSettings } from '../ui/Settings';
 import { getClothingItem, normalizeEquipment, loadClothing, ClothingLayers, getClothingTexture, applyClothingColor, inventoryCategories } from '../items/Clothing';
 import { Scene } from 'phaser';
 import { Player } from '../objects/Player';
@@ -10,9 +12,11 @@ import { layoutItemIcon } from '../ui/ItemIcon';
 import { addInventoryBackdrop } from '../ui/InventoryBackdrop';
 import { addGameFrame } from '../ui/GameFrame';
 import { addItemRarityEffect } from '../ui/ItemRarityEffect';
-import { addRankingEffect } from '../ui/RankingEffect';
+import { addRankingEffect, addLevelBadgePulse } from '../ui/RankingEffect';
 import { openAdminGrants } from '../ui/AdminGrants';
 import { openAdminReset } from '../ui/AdminReset';
+import { createEmojiMenu } from '../ui/EmojiMenu';
+import { openPurchaseConfirmation } from '../ui/PurchaseConfirmation';
 
 export class BaseRoom extends Scene {
     constructor(key) {
@@ -96,6 +100,26 @@ export class BaseRoom extends Scene {
 
         addGameFrame(this);
         this.createChat();
+        this.vanished = false;
+        if (this.registry.get('auth')?.user?.isAdmin) {
+            this.vanishButton = this.add.text(16, this.scale.height - 16, 'VANISH', {
+                fontFamily: 'Rubik, Arial, sans-serif', fontSize: '12px', fontStyle: 'bold',
+                color: '#173f80', backgroundColor: '#d8efff', padding: { x: 6, y: 4 }
+            }).setOrigin(0, 1).setDepth(100).setScrollFactor(0)
+                .setInteractive({ useHandCursor: true });
+            this.addButtonHover(this.vanishButton);
+            this.vanishButton.on('pointerdown', async (pointer, localX, localY, event) => {
+                event.stopPropagation();
+                if (this.vanishPending) return;
+                this.vanishPending = true;
+                try {
+                    const result = await this.multiplayer.requestInventory('admin:vanish', { active: !this.vanished });
+                    if (this.sys.isActive()) this.setVanishState(result.active);
+                } catch (error) {
+                    if (this.sys.isActive()) { this.sound.play('hurt-sfx'); this.showItemNotice(error.message); }
+                } finally { this.vanishPending = false; }
+            });
+        }
         const logoutButton = this.add.image(this.scale.width - 10, 14, 'logout-symbol');
         logoutButton.setScale(76 / logoutButton.height)
             .setOrigin(1, 0).setDepth(100).setScrollFactor(0)
@@ -116,6 +140,12 @@ export class BaseRoom extends Scene {
         logoutButton.once('destroy', () => logoutFloat.stop());
         this.events.once('shutdown', () => this.closePlayerCard(false));
         return this.player;
+    }
+
+    setVanishState(active) {
+        this.vanished = active;
+        this.player.container.setAlpha(active ? 0.4 : 1);
+        this.vanishButton?.setText(active ? 'VANISH ✓' : 'VANISH');
     }
 
     showClickMarker(x, y) {
@@ -177,10 +207,19 @@ export class BaseRoom extends Scene {
             'assets/ui/send-button.png'
         );
         this.load.image('admin-symbol', 'assets/ui/admin-symbol.png');
+        this.load.image('emoji-button', 'assets/ui/emoji-button.png');
+        this.load.image('emojis', 'assets/ui/emojis.png');
         this.load.image('quest-mark', 'assets/ui/quest-mark.png');
         this.load.image('in-minigame-symbol', 'assets/ui/in-minigame-symbol.png');
+        this.load.spritesheet('catching-snow-items', 'assets/ui/catching-snow-items.png', {
+            frameWidth: 44, frameHeight: 44
+        });
         this.load.image('logout-symbol', 'assets/ui/logout-symbol.png');
         this.load.image('x-button', 'assets/ui/x-button.png');
+        this.load.image('page-arrow-left', 'assets/ui/arrowLeft-button.png');
+        this.load.image('settings-button', 'assets/ui/settings-button.png');
+        this.load.image('catching-snow-background', 'assets/ui/catching-snow-background.png');
+        this.load.image('catching-snow-basket', 'assets/ui/catching-snow-basket.png');
         this.load.image('coin-symbol', 'assets/ui/coin-symbol.png');
         this.load.image('levelup-symbol', 'assets/ui/levelup-symbol.png');
         this.load.spritesheet('levels-symbols', 'assets/ui/levels-symbols.png', {
@@ -213,6 +252,9 @@ export class BaseRoom extends Scene {
         if (!this.cache.audio.exists('sfx-buy')) {
             this.load.audio('sfx-buy', 'sfx/sfx-buy.mp3');
         }
+        for (const key of ['coin-sfx', 'hurt-sfx', 'snowball-sfx']) {
+            if (!this.cache.audio.exists(key)) this.load.audio(key, `sfx/${key}.mp3`);
+        }
         loadClothing(this);
     }
     
@@ -220,10 +262,10 @@ export class BaseRoom extends Scene {
     createChat() {
         const { width, height } = this.scale;
 
-        const barY = height - 52;
+        const barY = height - 47;
         const barWidth = Math.min(width - 80, 650);
         const barRight = width / 2 + barWidth / 2;
-        const inputWidth = barWidth - 150;
+        const inputWidth = barWidth - 246;
         const inputHeight = 38;
         const buttonWidth = 42;
         const buttonHeight = buttonWidth * 41 / 38;
@@ -251,7 +293,9 @@ export class BaseRoom extends Scene {
         this.add.nineslice(width / 2, barY, 'chat-bar-frame', undefined,
             barWidth, 72, 12, 12, 12, 12)
         .setScrollFactor(0)
-        .setDepth(100);
+        .setDepth(100)
+        .setInteractive()
+        .on('pointerdown', (pointer, localX, localY, event) => event.stopPropagation());
 
         // HTML input
         this.chatInput = this.add.dom(
@@ -264,7 +308,7 @@ export class BaseRoom extends Scene {
 
          // Custom send button
         const sendButton = this.add.image(
-            barRight - 93,
+            barRight - barWidth + 41,
             barY,
             'send-button'
         )
@@ -275,7 +319,7 @@ export class BaseRoom extends Scene {
         // Inventory button
 
         const inventoryButton = this.add.image(
-            barRight - 45,
+            barRight - 141,
             barY,
             'inv-button'
         )
@@ -291,6 +335,21 @@ export class BaseRoom extends Scene {
 
         this.addButtonHover(sendButton);
         this.addButtonHover(inventoryButton);
+        const settingsButton = this.add.image(barRight - 45, barY, 'settings-button')
+            .setDisplaySize(buttonWidth, buttonHeight).setInteractive({ useHandCursor: true })
+            .setDepth(101).setScrollFactor(0);
+        this.addButtonHover(settingsButton);
+        settingsButton.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.emojiMenu?.setVisible(false);
+            this.sound.play('wood-tap-ui');
+            openSettings(this);
+        });
+        this.emojiButton = this.add.image(barRight - 93, barY, 'emoji-button')
+            .setDisplaySize(buttonWidth, buttonHeight).setInteractive({ useHandCursor: true })
+            .setDepth(101).setScrollFactor(0);
+        this.addButtonHover(this.emojiButton);
+        this.emojiMenu = createEmojiMenu(this, this.emojiButton, barRight - 117, barY - 124);
 
         const sendMessage = () => {
             const message = input.value.trim();
@@ -321,9 +380,11 @@ export class BaseRoom extends Scene {
             this.input.keyboard.enabled = true;
         });
 
-        input.addEventListener('pointerdown', (event) => {
-            event.stopPropagation();
-        });
+        // Phaser also listens for compatibility mouse/touch events on window.
+        // Stop those too, while preserving normal focus and text selection.
+        for (const eventName of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'click']) {
+            input.addEventListener(eventName, event => event.stopPropagation());
+        }
 
         this.events.once('shutdown', () => {
             this.input.keyboard.enabled = true;
@@ -395,6 +456,7 @@ export class BaseRoom extends Scene {
 
         const levelBadge = add(this.add.image(centerX, centerY + 184, 'levels-symbols', 0)
             .setDisplaySize(80, 80));
+        addLevelBadgePulse(this, levelBadge);
         const trade = add(this.add.text(centerX + 120, centerY + 185, '⇄ החלפה', {
             fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '17px',
             fontStyle: 'bold', color: '#ffffff', backgroundColor: '#3779a8', padding: { x: 10, y: 8 }
@@ -424,7 +486,7 @@ export class BaseRoom extends Scene {
             return;
         }
         name.setText(remotePlayer.username);
-        const level = Math.max(1, Math.min(3, remotePlayer.level || 1));
+        const level = Math.max(1, Math.min(rankSettings.maxLevel, remotePlayer.level || 1));
         levelBadge.setFrame(level - 1);
         clothing.setEquipment(remotePlayer.equipped);
     }
@@ -439,10 +501,12 @@ export class BaseRoom extends Scene {
     openInventory(page = 0, animate = true) {
         const { width, height } = this.scale;
         const inventory = this.registry.get('inventory');
-        const category = inventoryCategories.find(entry => entry.id === this.inventoryCategory)
-            || inventoryCategories[0];
-        this.inventoryCategory = category.id;
         const itemIds = this.catalogOpen ? (this.catalogItems || []).map(item => item.id) : inventory.items;
+        const categories = this.catalogOpen ? inventoryCategories.filter(entry =>
+            itemIds.some(id => entry.slots.includes(getClothingItem(id)?.slot))) : inventoryCategories;
+        const category = categories.find(entry => entry.id === this.inventoryCategory)
+            || categories[0] || inventoryCategories[0];
+        this.inventoryCategory = category.id;
         const items = itemIds.map(getClothingItem)
             .filter(item => item && category.slots.includes(item.slot))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
@@ -463,14 +527,16 @@ export class BaseRoom extends Scene {
         const stopClick = (pointer, localX, localY, event) => event.stopPropagation();
         const overlay = add(this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.45)
             .setInteractive()).on('pointerdown', stopClick);
-        add(this.add.nineslice(centerX, centerY, this.catalogOpen ? 'window-frame' : 'inventory-window-frame',
-            undefined, 860, 620, 16, 16, 16, 16));
+        const topTrim = this.catalogOpen ? 70 : 0;
+        const panelY = centerY + topTrim / 2;
+        const panelHeight = 620 - topTrim;
+        add(this.add.nineslice(centerX, panelY, this.catalogOpen ? 'window-frame' : 'inventory-window-frame',
+            undefined, 860, panelHeight, 16, 16, 16, 16));
         if (!this.catalogOpen) addInventoryBackdrop(this, panel, centerX, centerY);
-        add(this.add.rectangle(centerX, centerY, 860, 620, 0x000000, 0)
+        add(this.add.rectangle(centerX, panelY, 860, panelHeight, 0x000000, 0)
             .setInteractive()).on('pointerdown', stopClick);
-        if (this.catalogOpen) text(centerX, centerY - 214, 'קטלוג החנות', 26);
         if (this.registry.get('auth')?.user?.isAdmin) {
-            const reset = text(centerX - 280, centerY - 202, 'איפוס שחקן', 17)
+            const reset = text(centerX - 280, centerY - (this.catalogOpen ? 215 : 202), 'איפוס שחקן', 17)
                 .setInteractive({ useHandCursor: true });
             this.addButtonHover(reset);
             reset.on('pointerdown', (pointer, localX, localY, event) => {
@@ -478,7 +544,7 @@ export class BaseRoom extends Scene {
                 this.sound.play('wood-tap-ui');
                 openAdminReset(this);
             });
-            const grants = text(centerX - 280, centerY - 228, 'מתנות לשחקנים', 17)
+            const grants = text(centerX - (this.catalogOpen ? 40 : 280), centerY - (this.catalogOpen ? 215 : 228), 'מתנות לשחקנים', 17)
                 .setInteractive({ useHandCursor: true });
             this.addButtonHover(grants);
             grants.on('pointerdown', (pointer, localX, localY, event) => {
@@ -486,7 +552,7 @@ export class BaseRoom extends Scene {
                 this.sound.play('wood-tap-ui');
                 openAdminGrants(this);
             });
-            const manage = text(centerX - 280, centerY - 260, 'ניהול נדירות', 17)
+            const manage = text(centerX + (this.catalogOpen ? 210 : -280), centerY - (this.catalogOpen ? 215 : 260), 'ניהול נדירות', 17)
                 .setInteractive({ useHandCursor: true });
             this.addButtonHover(manage);
             manage.on('pointerdown', (pointer, localX, localY, event) => {
@@ -495,7 +561,7 @@ export class BaseRoom extends Scene {
                 openRarityManager(this);
             });
         }
-        const close = add(this.add.image(centerX + 418, centerY - 298, 'x-button')
+        const close = add(this.add.image(centerX + 418, centerY - 298 + topTrim, 'x-button')
             .setInteractive({ useHandCursor: true }));
         close.setScale(56 / close.width);
         this.addButtonHover(close);
@@ -505,15 +571,18 @@ export class BaseRoom extends Scene {
             this.toggleInventory();
         });
 
-        inventoryCategories.forEach((entry, index) => {
-            const x = centerX + 360 - index * 80;
-            const button = add(this.add.image(x, centerY - (this.catalogOpen ? 153 : 220), 'inventory-symbols', index)
-                .setDisplaySize(76, 76).setData('categoryId', entry.id)
+        const categorySpacing = Math.min(80, 480 / Math.max(1, categories.length - 1));
+        const categorySize = Math.min(76, categorySpacing);
+        categories.forEach((entry, index) => {
+            const frameIndex = inventoryCategories.indexOf(entry);
+            const x = centerX + 360 - index * categorySpacing;
+            const button = add(this.add.image(x, centerY - (this.catalogOpen ? 153 : 220), 'inventory-symbols', frameIndex)
+                .setDisplaySize(categorySize, categorySize).setData('categoryId', entry.id)
                 .setInteractive({ useHandCursor: true }));
             if (entry.id === category.id) {
                 const selectedColor = { texture: 'inventory-symbols', hue: 180,
                     frameWidth: 54, frameHeight: 54 };
-                button.setTexture(getClothingTexture(this, selectedColor), index);
+                button.setTexture(getClothingTexture(this, selectedColor), frameIndex);
                 applyClothingColor(this, button, selectedColor);
             }
             this.addButtonHover(button);
@@ -552,16 +621,17 @@ export class BaseRoom extends Scene {
         const balance = text(previewX + 22, centerY - 174, inventory.currency.toLocaleString(), 34).setStyle(metricStyle);
         if (balance.width > 160) balance.setScale(160 / balance.width);
         add(this.add.image(previewX - balance.displayWidth / 2 - 12, centerY - 174, 'coin-symbol').setDisplaySize(48, 48 * 50 / 48));
-        const level = Math.max(1, Math.min(3, inventory.level || 1));
+        const level = Math.max(1, Math.min(rankSettings.maxLevel, inventory.level || 1));
         if (!this.catalogOpen) addRankingEffect(this, panel, previewX, centerY, level);
-        add(this.add.image(previewX - 84, centerY + 224, 'levels-symbols', level - 1)
+        const levelBadge = add(this.add.image(previewX - 84, centerY + 224, 'levels-symbols', level - 1)
             .setDisplaySize(96, 96));
+        addLevelBadgePulse(this, levelBadge);
         const rankingText = text(previewX + 70, centerY + 210, (inventory.rankingPoints || 0).toLocaleString(), 32)
             .setStyle(metricStyle);
         if (rankingText.width > 100) rankingText.setScale(100 / rankingText.width);
         add(this.add.image(previewX + 70 - rankingText.displayWidth / 2 - 33, centerY + 210, 'levelup-symbol')
             .setDisplaySize(44, 44 * 56 / 51));
-        text(previewX + 54, centerY + 239, level < 3
+        text(previewX + 54, centerY + 239, level < rankSettings.maxLevel
             ? `עוד ${(inventory.pointsToNextLevel || 0).toLocaleString()} נק׳ לדרגה הבאה`
             : 'הדרגה המרבית', 21).setStyle(metricStyle).setWordWrapWidth(170, true).setOrigin(0.5, 0);
 
@@ -574,7 +644,7 @@ export class BaseRoom extends Scene {
         items.slice(this.inventoryPage * pageSize, (this.inventoryPage + 1) * pageSize)
             .forEach((item, index) => {
                 const x = centerX + 250 - (index % 3) * 140;
-                const y = centerY - (this.catalogOpen ? 45 : 100) + Math.floor(index / 3) * 145;
+                const y = centerY - (this.catalogOpen ? 45 : 108) + Math.floor(index / 3) * 145;
                 const owned = inventory.items.includes(item.id);
                 const selected = (this.catalogOpen ? this.catalogPreviewEquipment : inventory.equipped)?.[item.slot] === item.id;
                 const rarity = this.registry.get('itemRarities')?.[item.id] || 'C';
@@ -632,13 +702,24 @@ export class BaseRoom extends Scene {
                 });
             });
         if (pages > 1) {
-            const pageY = centerY + (this.catalogOpen ? 212 : 270);
-            text(centerX + 80, pageY, `${this.inventoryPage + 1} / ${pages}`, 16);
-            for (const [offset, label, change] of [[-80, '<', -1], [80, '>', 1]]) {
-                const control = text(centerX + 80 + offset, pageY, label, 23)
-                    .setInteractive({ useHandCursor: true });
+            const pageY = centerY + (this.catalogOpen ? 222 : 280);
+            for (const [offset, change] of [[-32, 1], [32, -1]]) {
+                const enabled = this.inventoryPage + change >= 0 && this.inventoryPage + change < pages;
+                const control = add(this.add.image(centerX + 110 + offset, pageY, 'page-arrow-left'))
+                    .setFlipX(change === -1)
+                    .setData('paginationChange', change).setData('paginationEnabled', enabled);
+                control.setScale(54 / control.width);
+                if (!enabled) {
+                    const grayArrow = { texture: 'page-arrow-left',
+                        palette: { '#c9ebff': '#d4d4d4' }, frameWidth: 67, frameHeight: 70 };
+                    control.setTexture(getClothingTexture(this, grayArrow), 0);
+                    control.setTint(0x999999).setAlpha(0.45);
+                    continue;
+                }
+                control.setInteractive({ useHandCursor: true });
                 this.addButtonHover(control);
-                control.on('pointerdown', () => {
+                control.on('pointerdown', (pointer, localX, localY, event) => {
+                    event.stopPropagation();
                     this.sound.play('inventory-click');
                     reopen(this.inventoryPage + change);
                 });
@@ -663,16 +744,17 @@ export class BaseRoom extends Scene {
         finally { this.inventoryActionPending = false; }
     }
 
-    async openShopCatalog() {
+    async openShopCatalog(catalogId = 'main') {
         if (this.sys.settings.key !== 'Shop' || this.catalogLoading) return;
         this.catalogLoading = true;
         try {
-            const result = await this.multiplayer.requestInventory('shop:catalog', {});
+            const result = await this.multiplayer.requestInventory('shop:catalog', { catalogId });
             if (!this.sys.isActive()) return;
             this.closePlayerCard();
             if (this.inventoryWindow) closeWindow(this, this.inventoryWindow);
             this.inventoryWindow = null;
             this.catalogItems = result.items;
+            this.activeCatalogId = result.catalogId || catalogId;
             this.catalogOpen = true;
             this.catalogPreviewEquipment = { ...this.registry.get('inventory').equipped };
             this.inventoryCategory = 'bodyColor';
@@ -682,14 +764,22 @@ export class BaseRoom extends Scene {
     }
 
     async buyItem(itemId) {
-        if (this.inventoryActionPending) return;
-        this.inventoryActionPending = true;
-        try {
-            await this.multiplayer.requestInventory('shop:purchase', { itemId });
-            if (this.sys.isActive()) this.sound.play('sfx-buy');
-            if (this.sys.isActive()) this.showItemNotice('הפריט נוסף לתיק החפצים!');
-        } catch (error) { if (this.sys.isActive()) this.showItemNotice(error.message); }
-        finally { this.inventoryActionPending = false; }
+        if (this.inventoryActionPending || this.purchaseModal) return;
+        const item = getClothingItem(itemId);
+        const offer = this.catalogItems?.find(entry => entry.id === itemId);
+        if (!this.catalogOpen || !item || !offer) return;
+        const catalogId = this.activeCatalogId || 'main';
+        return openPurchaseConfirmation(this, item, offer.price, async () => {
+            if (this.inventoryActionPending) throw new Error('מתבצעת פעולה נוספת. נסו שוב בעוד רגע.');
+            this.inventoryActionPending = true;
+            try {
+                await this.multiplayer.requestInventory('shop:purchase', { itemId, catalogId });
+                if (this.sys.isActive()) {
+                    this.sound.play('sfx-buy');
+                    this.showItemNotice('הפריט נוסף לתיק החפצים!');
+                }
+            } finally { this.inventoryActionPending = false; }
+        });
     }
 
     showItemNotice(message) {
@@ -710,7 +800,7 @@ export class BaseRoom extends Scene {
 
     updateRoom(delta) {
         if (!this.player) return;
-        if (this.snowGame || this.activeResident || this.adminModal || this.tradeModal) { this.multiplayer?.update(delta); return; }
+        if (this.snowGame || this.coffeeGame || this.activeResident || this.adminModal || this.tradeModal) { this.multiplayer?.update(delta); return; }
         if (this.multiplayer?.backgroundControlled) return;
 
         // Update player movement first

@@ -1,0 +1,9 @@
+{
+  "variants": [
+    {
+      "id": "silver",
+      "name": "שרשרת כסופה",
+      "palette": { "#ff9d00": "#8294a6", "#ffc400": "#becbd8", "#ffdf76": "#f1f7fc" }
+    }
+  ]
+}

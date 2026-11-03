@@ -1,4 +1,5 @@
 const boundsByFrame = new WeakMap();
+const enlargedSlots = new Set(['hands', 'shoes', 'pants', 'accessory', 'necklace', 'glasses']);
 
 // Clothing sheets align to a full character. Icons instead center the visible art.
 export function layoutItemIcon(sprite, slot) {
@@ -29,6 +30,8 @@ export function layoutItemIcon(sprite, slot) {
         boundsByFrame.set(frame, bounds);
     }
     sprite.setOrigin(bounds.x, bounds.y);
-    sprite.setScale(Math.min(slot === 'bodyColor' ? 1.2 : 1.6,
-        84 / bounds.width, 84 / bounds.height));
+    const enlarged = enlargedSlots.has(slot);
+    const maxSize = enlarged ? 96 : 84;
+    sprite.setScale(Math.min(slot === 'bodyColor' ? 1.2 : enlarged ? 2.4 : 1.6,
+        maxSize / bounds.width, maxSize / bounds.height));
 }

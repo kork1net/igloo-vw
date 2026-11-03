@@ -7,6 +7,8 @@ import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { AUTO, Game, Scale } from 'phaser';
+import { installFullscreen } from './ui/Fullscreen';
+import { restoreVolume } from './ui/Settings';
 
 const config = {
     type: AUTO,
@@ -44,33 +46,14 @@ const config = {
 const StartGame = (parent) => {
     const game = new Game({ ...config, parent });
 
-    function updateCanvasDisplay() {
-        const canvas = game.canvas;
-        if (!canvas) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        const fitScale = Math.min(
-            window.innerWidth / config.width,
-            window.innerHeight / config.height
-        );
-        const physicalScale = fitScale * dpr;
-        const sharpScale = physicalScale >= 1
-            ? Math.floor(physicalScale) : 1 / Math.ceil(1 / physicalScale);
-
-        // Preserve pixel-aligned sizing in both browser modes.
-        game.scale.setZoom(sharpScale / dpr);
-        canvas.style.imageRendering = 'pixelated';
-    }
-
+    let removeFullscreen;
     game.events.once('ready', () => {
-        updateCanvasDisplay();
-        window.addEventListener('resize', updateCanvasDisplay);
-        document.addEventListener('fullscreenchange', updateCanvasDisplay);
+        restoreVolume(game.sound);
+        removeFullscreen = installFullscreen(game, config);
     });
 
     game.events.once('destroy', () => {
-        window.removeEventListener('resize', updateCanvasDisplay);
-        document.removeEventListener('fullscreenchange', updateCanvasDisplay);
+        removeFullscreen?.();
     });
 
     return game;

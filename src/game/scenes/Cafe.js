@@ -1,6 +1,7 @@
 import { BaseRoom } from '../rooms/BaseRoom';
 import { residents } from '../residents/residents';
 import { Resident } from '../objects/Resident';
+import { createCoffeeGameEntry } from '../minigames/CoffeeMemory';
 
 export class Cafe extends BaseRoom {
     constructor() { super('Cafe'); }
@@ -53,6 +54,7 @@ export class Cafe extends BaseRoom {
             }
         }
         this.createPlayer(width / 2, height - 190, 'Player1');
+        this.coffeeGameEntry = createCoffeeGameEntry(this);
         this.residents = new Map(residents.filter(resident => resident.room === 'Cafe')
             .map(definition => [definition.id, new Resident(this, definition)]));
         this.exit = this.add.rectangle(width / 2, height - 100, 110, 55, 0x76513b)

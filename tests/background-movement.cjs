@@ -16,6 +16,7 @@ vm.runInNewContext(fs.readFileSync('server/index.cjs', 'utf8'), {
         : name === '../shared/collision.js' ? require('../shared/collision.js')
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
+        : name === './coffee-game.cjs' ? require('../server/coffee-game.cjs')
         : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
@@ -38,12 +39,12 @@ const socket = {
 };
 connect(socket);
 handlers['inventory:equip']({ itemId: 'black-shirt', equip: true }, () => {});
-const state = { x: 100, y: 100, direction: 6, facingLeft: false,
+const state = { x: 100, y: 200, direction: 6, facingLeft: false,
     username: 'Walker', shirt: 'black-shirt', isMoving: true, isRunning: false };
 const lastState = () => broadcasts.at(-1).data;
 
 // Advance the server clock without running any browser frames.
-handlers.playerBackground({ hidden: true, state, target: { x: 540, y: 100 } });
+handlers.playerBackground({ hidden: true, state, target: { x: 540, y: 200 } });
 now = 1000;
 tick();
 assert.equal(lastState().x, 320);
@@ -64,7 +65,7 @@ assert.equal(lastState().x, 550);
 
 // Running retains its speed, stops exactly at the target and resumes mid-route.
 handlers.playerBackground({ hidden: true, state: { ...state, isRunning: true },
-    target: { x: 860, y: 100 } });
+    target: { x: 860, y: 200 } });
 now += 1000;
 tick();
 assert.equal(lastState().x, 480);
@@ -81,7 +82,7 @@ assert.equal(lastState().x, 100);
 assert.equal(lastState().isMoving, false);
 // Background movement uses the same solid walls and open doorway as the client.
 handlers.playerBackground({ hidden: false }, () => {});
-handlers.playerMove({ ...state, x: 500, y: 100 });
+handlers.playerMove({ ...state, x: 500, y: 200 });
 handlers.playerMove({ ...state, x: 500, y: 430 });
 const { getShopColliders } = require('../shared/collision.js');
 const walls = getShopColliders(require('../shared/square.json'));
@@ -105,4 +106,51 @@ tick();
 assert.ok(Math.abs(lastState().y - 240) < 0.001);
 handlers.disconnect();
 assert.equal(timerCleared, true);
+
+// Interior Shop uses the same wall for live packets, initial spawn and hidden tabs.
+socket.id = 'shop-walker';
+socket.handshake.auth = { room: 'Shop', player: { x: 640, y: 65 } };
+connect(socket);
+const { getShopInteriorColliders } = require('../shared/collision.js');
+const interiorMinimumY = getShopInteriorColliders()[0].bottom + 4 - 24;
+handlers.playerBackground({ hidden: false }, value => { resumed = value; });
+assert.ok(resumed.y >= interiorMinimumY);
+handlers.playerMove({ ...state, x: 640, y: 500 });
+handlers.playerMove({ ...state, x: 640, y: 65 });
+assert.ok(lastState().y >= interiorMinimumY && lastState().y < interiorMinimumY + 2);
+handlers.playerMove({ ...state, x: 640, y: 500 });
+handlers.playerBackground({ hidden: true, state: { ...state, x: 640, y: 500, isRunning: true },
+    target: { x: 640, y: 65 } });
+now += 2000;
+tick();
+assert.ok(lastState().y >= interiorMinimumY && lastState().y < interiorMinimumY + 2);
+now += 1000;
+tick();
+assert.equal(lastState().isMoving, false);
+handlers.playerBackground({ hidden: false }, value => { resumed = value; });
+assert.ok(resumed.y >= interiorMinimumY);
+handlers.disconnect();
 console.log('PASS: background walk/run, arrival, resume, stale updates, released keys, cleanup');
+console.log('PASS: shop interior spawn, foreground movement and background running cannot enter the wall');
+
+socket.id = 'sky-walker';
+socket.handshake.auth = { room: 'Game', player: { x: 1145, y: 25 } };
+connect(socket);
+handlers.playerBackground({ hidden: false }, value => { resumed = value; });
+assert.ok(resumed.y >= 136 && resumed.y <= 139, 'Spawn must recover onto the snowy ground');
+handlers.playerMove({ ...state, x: 1145, y: 200 });
+handlers.playerMove({ ...state, x: 1145, y: 25 });
+assert.ok(lastState().y >= 136 && lastState().y <= 139);
+handlers.playerMove({ ...state, x: 1145, y: 200 });
+handlers.playerBackground({ hidden: true, state: { ...state, x: 1145, y: 200, isRunning: true },
+    target: { x: 1145, y: 25 } });
+now += 1000;
+tick();
+assert.ok(lastState().y >= 136 && lastState().y <= 139);
+now += 1000;
+tick();
+assert.equal(lastState().isMoving, false);
+handlers.playerBackground({ hidden: false }, value => { resumed = value; });
+assert.ok(resumed.y >= 136 && resumed.y <= 139);
+handlers.disconnect();
+console.log('PASS: irregular snow edge constrains spawning, foreground packets and background running');

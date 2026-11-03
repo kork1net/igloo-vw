@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import { requestAccount, savedToken, saveToken } from '../network/Auth';
 import registration from '../../../shared/registration.json';
+import rooms from '../../../shared/rooms.json';
 import { getClothingItem } from '../items/Clothing';
 import { createSnowOverlay } from '../ui/Snow';
 
@@ -30,7 +31,7 @@ export class MainMenu extends Scene {
                     autocomplete="new-password" minlength="8" maxlength="128" /></label>
                 <p class="account-hint"></p>
                 <p class="account-status" role="status" aria-live="polite"></p>
-                <button class="account-submit" type="submit"></button>
+                <button class="account-submit" type="submit"><img alt="" draggable="false" /></button>
             </form>
             <aside class="registration-preview" hidden aria-label="תצוגה מקדימה של השחקן">
                 <span class="registration-preview-title">השחקן שלכם</span>
@@ -123,12 +124,18 @@ export class MainMenu extends Scene {
             root.setAttribute('aria-busy', String(value));
             for (const control of root.querySelectorAll('input, button')) control.disabled = value;
             confirm.disabled = value || mode !== 'register';
-            submit.textContent = value ? 'מתחברים…' : mode === 'login' ? 'כניסה לעולם' : 'יצירת שחקן';
+            submit.setAttribute('aria-label', value ? 'מתחברים…' : mode === 'login' ? 'כניסה לעולם' : 'יצירת שחקן');
+            const buttonImage = submit.querySelector('img');
+            const source = mode === 'login' ? 'assets/ui/enter-world.png' : 'assets/ui/create-player.png';
+            if (buttonImage.getAttribute('src') !== source) buttonImage.src = source;
+            buttonImage.width = mode === 'login' ? 270 : 238;
+            buttonImage.height = 86;
         };
         const setMode = value => {
             mode = value;
             root.dataset.mode = mode;
             const register = mode === 'register';
+            username.minLength = register ? 4 : 3;
             preview.hidden = !register;
             for (const tab of tabs) tab.setAttribute('aria-selected', String(tab.dataset.mode === mode));
             root.querySelector('.account-confirm').hidden = !register;
@@ -137,7 +144,7 @@ export class MainMenu extends Scene {
             password.value = confirm.value = '';
             status.textContent = '';
             root.querySelector('.account-hint').textContent = register
-                ? 'שם: 3–20 אותיות או ספרות, מקף או קו תחתון. סיסמה: לפחות 8 תווים.'
+                ? 'שם: 4-20 אותיות או ספרות, מקף או קו תחתון. סיסמה: לפחות 8 תווים.'
                 : 'כבר נרשמתם? התחברו עם שם המשתמש והסיסמה שלכם.';
             setBusy(false);
         };
@@ -145,7 +152,8 @@ export class MainMenu extends Scene {
             saveToken(result.token);
             this.registry.set('auth', result);
             this.registry.set('inventory', result.inventory);
-            this.scene.start('Game', { fromRoom: 'MainMenu' });
+            const room = rooms.includes(result.inventory?.lastRoom) ? result.inventory.lastRoom : 'Game';
+            this.scene.start(room, { fromRoom: 'MainMenu' });
         };
         tabs.forEach(tab => tab.addEventListener('click', () => setMode(tab.dataset.mode)));
         root.addEventListener('click', event => {
@@ -164,7 +172,7 @@ export class MainMenu extends Scene {
                 return;
             }
             setBusy(true);
-            status.textContent = '';
+            status.textContent = 'מתחברים…';
             try {
                 const result = await requestAccount(mode, { username: username.value, password: password.value,
                     ...(mode === 'register' ? { starterColor, gender: selectedGender() } : {}) }, controller.signal);

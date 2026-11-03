@@ -9,7 +9,8 @@
     "hair",
     "hat",
     "accessory",
-    "glasses"
+    "glasses",
+    "hands"
   ],
   "items": [
     {
@@ -31,6 +32,23 @@
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "accessory/golden-necklace--silver",
+      "slot": "necklace",
+      "name": "שרשרת כסופה",
+      "texture": "clothing:accessory/golden-necklace",
+      "path": "assets/items/accessory/golden-necklace.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "accessory/golden-necklace",
+      "hue": 0,
+      "palette": {
+        "#ff9d00": "#8294a6",
+        "#ffc400": "#becbd8",
+        "#ffdf76": "#f1f7fc"
+      }
     },
     {
       "id": "body-color/blue",
@@ -61,7 +79,7 @@
       "name": "כתום",
       "slot": "bodyColor",
       "texture": "player",
-      "tint": 16761228,
+      "tint": 16753485,
       "order": 5
     },
     {
@@ -107,12 +125,46 @@
     {
       "id": "hair/boy-messy-hair-1",
       "slot": "hair",
-      "name": "boy-messy-hair-1",
+      "name": "שיער פרוע חום",
       "texture": "clothing:hair/boy-messy-hair-1",
       "path": "assets/items/hair/boy-messy-hair-1.png",
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "hair/boy-messy-hair-1--black",
+      "slot": "hair",
+      "name": "שיער פרוע שחור",
+      "texture": "clothing:hair/boy-messy-hair-1",
+      "path": "assets/items/hair/boy-messy-hair-1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/boy-messy-hair-1",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#303541",
+        "#663931": "#171c27",
+        "#8e625b": "#4a5261"
+      }
+    },
+    {
+      "id": "hair/boy-messy-hair-1--blonde",
+      "slot": "hair",
+      "name": "שיער פרוע בלונדיני",
+      "texture": "clothing:hair/boy-messy-hair-1",
+      "path": "assets/items/hair/boy-messy-hair-1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hair/boy-messy-hair-1",
+      "hue": 0,
+      "palette": {
+        "#7d534c": "#e5c36c",
+        "#663931": "#b88a42",
+        "#8e625b": "#f4dc92"
+      }
     },
     {
       "id": "hair/eye-cover-girl-hair",
@@ -203,6 +255,26 @@
       }
     },
     {
+      "id": "hands/sofgania-choco",
+      "slot": "hands",
+      "name": "sofgania-choco",
+      "texture": "clothing:hands/sofgania-choco",
+      "path": "assets/items/hands/sofgania-choco.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hands/sofgania-riba",
+      "slot": "hands",
+      "name": "sofgania-riba",
+      "texture": "clothing:hands/sofgania-riba",
+      "path": "assets/items/hands/sofgania-riba.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
       "id": "hat/green-hat1",
       "slot": "hat",
       "name": "כובע מצחייה ירוק",
@@ -211,6 +283,24 @@
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "hat/green-hat1--black",
+      "slot": "hat",
+      "name": "כובע מצחייה שחור",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": 0,
+      "palette": {
+        "#51d353": "#303541",
+        "#1e7b1f": "#141923",
+        "#9effa0": "#4a5261",
+        "#318f32": "#252b36"
+      }
     },
     {
       "id": "hat/green-hat1--blue",
@@ -238,6 +328,24 @@
       "tint": 11579568
     },
     {
+      "id": "hat/green-hat1--gray",
+      "slot": "hat",
+      "name": "כובע מצחייה אפור",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": 0,
+      "palette": {
+        "#51d353": "#8f8f8f",
+        "#1e7b1f": "#3f3f3f",
+        "#9effa0": "#a6a6a6",
+        "#318f32": "#626262"
+      }
+    },
+    {
       "id": "hat/green-hat1--purple",
       "slot": "hat",
       "name": "כובע מצחייה סגול",
@@ -250,14 +358,115 @@
       "hue": 160
     },
     {
+      "id": "hat/green-hat1--white",
+      "slot": "hat",
+      "name": "כובע מצחייה לבן",
+      "texture": "clothing:hat/green-hat1",
+      "path": "assets/items/hat/green-hat1.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/green-hat1",
+      "hue": 0,
+      "palette": {
+        "#51d353": "#e4edf5",
+        "#1e7b1f": "#8197ab",
+        "#9effa0": "#fafcff",
+        "#318f32": "#bccbd9"
+      }
+    },
+    {
+      "id": "hat/hanukia-bow",
+      "slot": "hat",
+      "name": "קשת חנוכה",
+      "texture": "clothing:hat/hanukia-bow",
+      "path": "assets/items/hat/hanukia-bow.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hat/hanukia-bow--colorful",
+      "slot": "hat",
+      "name": "קשת חנוכה צבעונית",
+      "texture": "clothing:hat/hanukia-bow",
+      "path": "assets/items/hat/hanukia-bow.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/hanukia-bow",
+      "hue": 0,
+      "palette": {
+        "#3d3d3d": "#34345c",
+        "#aaaaaa": "#e5b94c",
+        "#747474": "#bc9238",
+        "#5c5c5c": "#96732c",
+        "#ffffff": "#f7d65a"
+      }
+    },
+    {
+      "id": "hat/hanukia-bow--gold",
+      "slot": "hat",
+      "name": "קשת חנוכה מוזהבת",
+      "texture": "clothing:hat/hanukia-bow",
+      "path": "assets/items/hat/hanukia-bow.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "hat/hanukia-bow",
+      "hue": 0,
+      "palette": {
+        "#3d3d3d": "#68421f",
+        "#aaaaaa": "#f2c34f",
+        "#747474": "#d99a30",
+        "#5c5c5c": "#a86c25"
+      }
+    },
+    {
       "id": "pants/baggy-gray-pants",
       "slot": "pants",
-      "name": "baggy-gray-pants",
+      "name": "מכנסיים רחבים אפורים",
       "texture": "clothing:pants/baggy-gray-pants",
       "path": "assets/items/pants/baggy-gray-pants.png",
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "pants/baggy-gray-pants--black",
+      "slot": "pants",
+      "name": "מכנסיים רחבים שחורים",
+      "texture": "clothing:pants/baggy-gray-pants",
+      "path": "assets/items/pants/baggy-gray-pants.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/baggy-gray-pants",
+      "hue": 0,
+      "palette": {
+        "#8f8f8f": "#303541",
+        "#3f3f3f": "#141923",
+        "#a6a6a6": "#4a5261",
+        "#626262": "#252b36"
+      }
+    },
+    {
+      "id": "pants/baggy-gray-pants--white",
+      "slot": "pants",
+      "name": "מכנסיים רחבים לבנים",
+      "texture": "clothing:pants/baggy-gray-pants",
+      "path": "assets/items/pants/baggy-gray-pants.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/baggy-gray-pants",
+      "hue": 0,
+      "palette": {
+        "#8f8f8f": "#e4edf5",
+        "#3f3f3f": "#8197ab",
+        "#a6a6a6": "#fafcff",
+        "#626262": "#bccbd9"
+      }
     },
     {
       "id": "pants/blue-jeans",
@@ -268,6 +477,24 @@
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "pants/blue-jeans--black",
+      "slot": "pants",
+      "name": "ג׳ינס שחור",
+      "texture": "clothing:pants/blue-jeans",
+      "path": "assets/items/pants/blue-jeans.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/blue-jeans",
+      "hue": 0,
+      "palette": {
+        "#425888": "#303541",
+        "#001a54": "#141923",
+        "#4f669a": "#4a5261",
+        "#1b356e": "#252b36"
+      }
     },
     {
       "id": "pants/blue-jeans--burgundy",
@@ -308,12 +535,65 @@
     {
       "id": "pants/blue-shorts",
       "slot": "pants",
-      "name": "blue-shorts",
+      "name": "מכנסיים קצרים כחולים",
       "texture": "clothing:pants/blue-shorts",
       "path": "assets/items/pants/blue-shorts.png",
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}
+    },
+    {
+      "id": "pants/blue-shorts--black",
+      "slot": "pants",
+      "name": "מכנסיים קצרים שחורים",
+      "texture": "clothing:pants/blue-shorts",
+      "path": "assets/items/pants/blue-shorts.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/blue-shorts",
+      "hue": 0,
+      "palette": {
+        "#486bba": "#4a5261",
+        "#00277d": "#171c27",
+        "#2f4c8e": "#303541"
+      }
+    },
+    {
+      "id": "pants/blue-shorts--burgundy",
+      "slot": "pants",
+      "name": "מכנסיים קצרים בצבע בורדו",
+      "texture": "clothing:pants/blue-shorts",
+      "path": "assets/items/pants/blue-shorts.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/blue-shorts",
+      "hue": 120
+    },
+    {
+      "id": "pants/blue-shorts--green",
+      "slot": "pants",
+      "name": "מכנסיים קצרים ירוקים",
+      "texture": "clothing:pants/blue-shorts",
+      "path": "assets/items/pants/blue-shorts.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/blue-shorts",
+      "hue": -100
+    },
+    {
+      "id": "pants/blue-shorts--purple",
+      "slot": "pants",
+      "name": "מכנסיים קצרים סגולים",
+      "texture": "clothing:pants/blue-shorts",
+      "path": "assets/items/pants/blue-shorts.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "pants/blue-shorts",
+      "hue": 60
     },
     {
       "id": "shirt/black-shirt",
@@ -402,6 +682,101 @@
       "walkTextures": {}
     },
     {
+      "id": "shirt/red-shirt--pink",
+      "slot": "shirt",
+      "name": "pink-shirt",
+      "texture": "clothing:shirt/red-shirt",
+      "path": "assets/items/shirt/red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "shirt/red-shirt",
+      "hue": 0,
+      "palette": {
+        "#d35151": "#d35d9f",
+        "#b43e3e": "#b44884",
+        "#7b1e1e": "#7b2455"
+      }
+    },
+    {
+      "id": "shirt/simple-red-shirt",
+      "slot": "shirt",
+      "name": "חולצה פשוטה אדומה",
+      "texture": "clothing:shirt/simple-red-shirt",
+      "path": "assets/items/shirt/simple-red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "shirt/simple-red-shirt--black",
+      "slot": "shirt",
+      "name": "חולצה פשוטה שחורה",
+      "texture": "clothing:shirt/simple-red-shirt",
+      "path": "assets/items/shirt/simple-red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "shirt/simple-red-shirt",
+      "hue": 0,
+      "palette": {
+        "#f56666": "#505050",
+        "#e04a4a": "#444444",
+        "#a72c2c": "#2e2e2e"
+      }
+    },
+    {
+      "id": "shirt/simple-red-shirt--blue",
+      "slot": "shirt",
+      "name": "חולצה פשוטה כחולה",
+      "texture": "clothing:shirt/simple-red-shirt",
+      "path": "assets/items/shirt/simple-red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "shirt/simple-red-shirt",
+      "hue": 0,
+      "palette": {
+        "#f56666": "#6692f5",
+        "#e04a4a": "#4a77e0",
+        "#a72c2c": "#2c51a7"
+      }
+    },
+    {
+      "id": "shirt/simple-red-shirt--green",
+      "slot": "shirt",
+      "name": "חולצה פשוטה ירוקה",
+      "texture": "clothing:shirt/simple-red-shirt",
+      "path": "assets/items/shirt/simple-red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "shirt/simple-red-shirt",
+      "hue": 0,
+      "palette": {
+        "#f56666": "#66f568",
+        "#e04a4a": "#4ae04c",
+        "#a72c2c": "#2ca72e"
+      }
+    },
+    {
+      "id": "shirt/simple-red-shirt--pink",
+      "slot": "shirt",
+      "name": "חולצה פשוטה ורודה",
+      "texture": "clothing:shirt/simple-red-shirt",
+      "path": "assets/items/shirt/simple-red-shirt.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "shirt/simple-red-shirt",
+      "hue": 0,
+      "palette": {
+        "#f56666": "#f587bd",
+        "#e04a4a": "#e068a2",
+        "#a72c2c": "#a74574"
+      }
+    },
+    {
       "id": "shoes/gray-shoes",
       "slot": "shoes",
       "name": "נעליים אפורות",
@@ -485,6 +860,103 @@
       "sourceItem": "shoes/gray-shoes",
       "hue": 0,
       "tint": 9423255
+    },
+    {
+      "id": "shoes/red-sneakers",
+      "slot": "shoes",
+      "name": "סניקרס אדומות",
+      "texture": "clothing:shoes/red-sneakers",
+      "path": "assets/items/shoes/red-sneakers.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {
+        "player-walk-1": {
+          "texture": "clothing:shoes/red-sneakers:walk-1",
+          "path": "assets/items/shoes/red-sneakers-walk-1.png"
+        },
+        "player-walk-2": {
+          "texture": "clothing:shoes/red-sneakers:walk-2",
+          "path": "assets/items/shoes/red-sneakers-walk-2.png"
+        }
+      }
+    },
+    {
+      "id": "shoes/red-sneakers--black",
+      "slot": "shoes",
+      "name": "סניקרס שחורות",
+      "texture": "clothing:shoes/red-sneakers",
+      "path": "assets/items/shoes/red-sneakers.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {
+        "player-walk-1": {
+          "texture": "clothing:shoes/red-sneakers:walk-1",
+          "path": "assets/items/shoes/red-sneakers-walk-1.png"
+        },
+        "player-walk-2": {
+          "texture": "clothing:shoes/red-sneakers:walk-2",
+          "path": "assets/items/shoes/red-sneakers-walk-2.png"
+        }
+      },
+      "sourceItem": "shoes/red-sneakers",
+      "hue": 0,
+      "palette": {
+        "#551010": "#171c27",
+        "#ac3232": "#303541",
+        "#d76b6b": "#4a5261"
+      }
+    },
+    {
+      "id": "shoes/red-sneakers--blue",
+      "slot": "shoes",
+      "name": "סניקרס כחולות",
+      "texture": "clothing:shoes/red-sneakers",
+      "path": "assets/items/shoes/red-sneakers.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {
+        "player-walk-1": {
+          "texture": "clothing:shoes/red-sneakers:walk-1",
+          "path": "assets/items/shoes/red-sneakers-walk-1.png"
+        },
+        "player-walk-2": {
+          "texture": "clothing:shoes/red-sneakers:walk-2",
+          "path": "assets/items/shoes/red-sneakers-walk-2.png"
+        }
+      },
+      "sourceItem": "shoes/red-sneakers",
+      "hue": 0,
+      "palette": {
+        "#551010": "#102755",
+        "#ac3232": "#325bac",
+        "#d76b6b": "#6b8fd7"
+      }
+    },
+    {
+      "id": "shoes/red-sneakers--green",
+      "slot": "shoes",
+      "name": "סניקרס ירוקות",
+      "texture": "clothing:shoes/red-sneakers",
+      "path": "assets/items/shoes/red-sneakers.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {
+        "player-walk-1": {
+          "texture": "clothing:shoes/red-sneakers:walk-1",
+          "path": "assets/items/shoes/red-sneakers-walk-1.png"
+        },
+        "player-walk-2": {
+          "texture": "clothing:shoes/red-sneakers:walk-2",
+          "path": "assets/items/shoes/red-sneakers-walk-2.png"
+        }
+      },
+      "sourceItem": "shoes/red-sneakers",
+      "hue": 0,
+      "palette": {
+        "#551010": "#10551b",
+        "#ac3232": "#32ac47",
+        "#d76b6b": "#6bd77d"
+      }
     }
   ]
 }

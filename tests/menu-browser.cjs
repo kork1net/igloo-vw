@@ -14,7 +14,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let ws;
 let launchError;
 let inventoryServer;
-if (process.argv.includes('--inventory')) {
+if (process.argv.includes('--inventory') || process.argv.includes('--fullscreen')) {
     process.env.VW_PORT = '0';
     process.env.VW_ACCOUNTS_FILE = path.join(profile, 'test-accounts.json');
     inventoryServer = require('../server/index.cjs').io;
@@ -90,9 +90,166 @@ browser.on('error', error => { launchError = error; });
         fonts: [...document.fonts].map(font => ({ family: font.family, status: font.status })),
         text: document.body.innerText.slice(0, 300)
     })`)));
+    if (process.argv.includes('--fullscreen')) {
+        await evaluate(`(async () => {
+            const source = await fetch('/src/game/rooms/BaseRoom.js').then(response => response.text());
+            const url = source.split('"').find(part => part.startsWith('/node_modules/.vite/deps/phaser.js'));
+            const module = await import(url), Phaser = module.default || module;
+            const prototype = Phaser.Scenes.SceneManager.prototype;
+            const render = prototype.render;
+            await new Promise(resolve => {
+                prototype.render = function (...args) {
+                    window.fullscreenTestGame = this.game;
+                    prototype.render = render;
+                    const result = render.apply(this, args);
+                    resolve();
+                    return result;
+                };
+            });
+            const scene = fullscreenTestGame.scene.getScene('MainMenu');
+            const objects = [];
+            objects.push(scene.add.rectangle(70, 70, 230, 90, 0xffffff).setOrigin(0).setDepth(100));
+            const label = scene.add.text(80, 80, 'CRISP 123', {
+                fontFamily: 'Rubik', fontSize: '23px', color: '#173f80', resolution: 2
+            }).setDepth(101);
+            window.fullscreenTestLabel = label;
+            objects.push(label);
+            // A later opaque object must still cover text; overlays cannot preserve this.
+            objects.push(scene.add.rectangle(180, 70, 120, 90, 0xffffff).setOrigin(0).setDepth(102));
+            const texture = scene.textures.addDynamicTexture('fullscreen-test-buffer', 60, 40);
+            texture.fill(0x15ca53).render();
+            objects.push(scene.add.image(320, 80, texture.key).setOrigin(0).setDepth(102));
+            window.fullscreenTestObjects = objects;
+            window.fullscreenCapture = () => new Promise(resolve => fullscreenTestGame.renderer.snapshot(image => {
+                const canvas = document.createElement('canvas');
+                canvas.width = image.width; canvas.height = image.height;
+                canvas.getContext('2d').drawImage(image, 0, 0);
+                resolve(canvas);
+            }));
+        })()`);
+        const originalViewport = await evaluate('({ width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio })');
+        const canvasState = async () => evaluate(`(() => {
+            const canvas = document.querySelector('#game-container > canvas');
+            const bounds = canvas.getBoundingClientRect();
+            return { width: canvas.width, height: canvas.height,
+                displayWidth: bounds.width, displayHeight: bounds.height,
+                left: bounds.left, top: bounds.top, dpr: devicePixelRatio,
+                logicalWidth: fullscreenTestGame.scale.width, logicalHeight: fullscreenTestGame.scale.height,
+                cameraWidth: fullscreenTestGame.scene.getScene('MainMenu').cameras.main.width,
+                cameraHeight: fullscreenTestGame.scene.getScene('MainMenu').cameras.main.height,
+                fullscreen: document.fullscreenElement?.id || null,
+                includesForm: document.fullscreenElement?.contains(document.querySelector('.account-panel')) || false };
+        })()`);
+        const initialCanvas = await canvasState();
+        const waitFullscreen = async expected => {
+            for (let i = 0; i < 40; i++) {
+                if ((await evaluate('!!document.fullscreenElement')) === expected) return true;
+                await sleep(50);
+            }
+            return false;
+        };
+        const press = async (key, code, virtualKey, repeat = false) => {
+            await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code,
+                windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey, autoRepeat: repeat });
+            if (!repeat) await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code,
+                windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey });
+        };
+        await send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080,
+            deviceScaleFactor: 1, mobile: false });
+        await sleep(150);
+        const normal1080Canvas = await canvasState();
+        assert.equal(normal1080Canvas.displayWidth, 1280);
+        assert.equal(normal1080Canvas.displayHeight, 720);
+        await evaluate('(async () => { window.fullscreenNormalCapture = await fullscreenCapture(); })()');
+        await press('F11', 'F11', 122);
+        if (!await waitFullscreen(true)) {
+            // Some headless builds reserve F11. Exercise the same handler with a CDP user gesture.
+            const result = await send('Runtime.evaluate', { expression:
+                `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F11', code: 'F11', bubbles: true }))`,
+                userGesture: true, returnByValue: true });
+            assert.ok(!result.exceptionDetails, 'Fullscreen gesture failed');
+        }
+        assert.ok(await waitFullscreen(true), 'F11 did not enter element fullscreen');
+        await sleep(150);
+        const fullscreenCanvas = await canvasState();
+        assert.equal(fullscreenCanvas.fullscreen, 'game-container');
+        assert.equal(fullscreenCanvas.includesForm, true, 'Fullscreen lost the HTML interface');
+        assert.deepEqual([fullscreenCanvas.width, fullscreenCanvas.height], [1920, 1080]);
+        assert.deepEqual([fullscreenCanvas.logicalWidth, fullscreenCanvas.logicalHeight], [1280, 720]);
+        assert.deepEqual([fullscreenCanvas.cameraWidth, fullscreenCanvas.cameraHeight], [1280, 720]);
+        assert.equal(fullscreenCanvas.displayWidth, 1920);
+        assert.equal(fullscreenCanvas.displayHeight, 1080);
+        assert.ok(fullscreenCanvas.displayWidth > normal1080Canvas.displayWidth, 'F11 entered fullscreen without enlarging the game');
+        assert.equal(fullscreenCanvas.left * fullscreenCanvas.dpr % 1, 0);
+        assert.equal(fullscreenCanvas.top * fullscreenCanvas.dpr % 1, 0);
+        const nativePixels = await evaluate(`(async () => {
+            fullscreenTestGame.textures.get('fullscreen-test-buffer').clear().fill(0x15ca53).render();
+            const capture = await fullscreenCapture();
+            const context = capture.getContext('2d');
+            const reference = document.createElement('canvas');
+            reference.width = capture.width; reference.height = capture.height;
+            const referenceContext = reference.getContext('2d');
+            referenceContext.imageSmoothingEnabled = false;
+            referenceContext.drawImage(fullscreenNormalCapture, 0, 0, capture.width, capture.height);
+            const actual = context.getImageData(120, 120, 140, 55).data;
+            const enlarged = referenceContext.getImageData(120, 120, 140, 55).data;
+            let changed = 0, ink = 0;
+            for (let i = 0; i < actual.length; i += 4) {
+                if (actual[i] < 200 && actual[i + 1] < 200) ink++;
+                if (Math.abs(actual[i] - enlarged[i]) + Math.abs(actual[i + 1] - enlarged[i + 1])
+                    + Math.abs(actual[i + 2] - enlarged[i + 2]) > 15) changed++;
+            }
+            const pixel = (x, y) => [...context.getImageData(x, y, 1, 1).data].slice(0, 3);
+            return { changed, ink, occluded: pixel(300, 135), offscreen: pixel(510, 150),
+                resolution: fullscreenTestLabel.style.resolution,
+                position: [fullscreenTestLabel.x, fullscreenTestLabel.y] };
+        })()`);
+        assert.ok(nativePixels.ink > 100, 'Native-size text was not rendered');
+        assert.ok(nativePixels.changed > 100, 'Text is still an enlargement of the low-resolution canvas');
+        assert.deepEqual(nativePixels.occluded, [255, 255, 255], 'Text bypassed scene depth ordering');
+        assert.deepEqual(nativePixels.offscreen, [21, 202, 83], 'Offscreen rendering was scaled twice');
+        assert.ok(nativePixels.resolution >= 1.5);
+        assert.deepEqual(nativePixels.position, [80, 80]);
+        await press('F11', 'F11', 122, true);
+        await sleep(100);
+        assert.equal(await evaluate('document.fullscreenElement?.id'), 'game-container');
+        await press('F11', 'F11', 122);
+        assert.ok(await waitFullscreen(false), 'Second F11 did not leave fullscreen');
+        await sleep(150);
+        const normalAfterExit = await canvasState();
+        assert.equal(normalAfterExit.displayWidth, normal1080Canvas.displayWidth);
+        assert.equal(normalAfterExit.displayHeight, normal1080Canvas.displayHeight);
+        assert.deepEqual([normalAfterExit.width, normalAfterExit.height], [1280, 720]);
+        await press('F11', 'F11', 122);
+        assert.ok(await waitFullscreen(true), 'F11 did not reenter fullscreen');
+        await send('Emulation.setDeviceMetricsOverride', { width: 2560, height: 1080, deviceScaleFactor: 1, mobile: false });
+        await sleep(150);
+        const ultrawideCanvas = await canvasState();
+        assert.equal(ultrawideCanvas.displayWidth, 1920);
+        assert.equal(ultrawideCanvas.displayHeight, 1080);
+        assert.equal(ultrawideCanvas.left, 320, 'Ultrawide fitting should center without stretching');
+        await press('Escape', 'Escape', 27);
+        if (!await waitFullscreen(false)) await evaluate('document.exitFullscreen()');
+        assert.ok(await waitFullscreen(false), 'Fullscreen exit did not restore the page');
+        await send('Emulation.setDeviceMetricsOverride', { ...originalViewport, mobile: false });
+        await sleep(150);
+        const restoredCanvas = await canvasState();
+        assert.deepEqual([restoredCanvas.width, restoredCanvas.height], [1280, 720]);
+        assert.deepEqual([restoredCanvas.displayWidth, restoredCanvas.displayHeight],
+            [initialCanvas.displayWidth, initialCanvas.displayHeight]);
+        assert.deepEqual(await evaluate('window.browserTestErrors'), []);
+        await evaluate(`(() => {
+            fullscreenTestObjects.forEach(object => object.destroy());
+            fullscreenTestGame.textures.remove('fullscreen-test-buffer');
+        })()`);
+        console.log('PASS browser: native-resolution fullscreen text, fixed logical world, depth ordering, offscreen textures, F11 toggle and restored normal size');
+    }
     assert.equal(await evaluate('document.querySelector(".account-confirm").hidden'), true);
+    assert.equal(await evaluate('document.querySelector(".account-submit img").getAttribute("src")'), 'assets/ui/enter-world.png');
+    assert.equal(await evaluate('document.querySelector(".account-submit").getAttribute("aria-label")'), 'כניסה לעולם');
     await evaluate('document.querySelector("[data-mode=register]").click()');
     assert.equal(await evaluate('document.querySelector(".account-confirm").hidden'), false);
+    assert.equal(await evaluate('document.querySelector(".account-submit img").getAttribute("src")'), 'assets/ui/create-player.png');
     assert.equal(await evaluate('document.querySelectorAll(".starter-color").length'), 4);
     assert.equal(await evaluate('document.querySelectorAll("input[name=gender]").length'), 2);
     await evaluate('document.querySelector("input[name=gender][value=female]").click()');
@@ -121,7 +278,7 @@ browser.on('error', error => { launchError = error; });
         form.requestSubmit();
     })()`);
     for (let i = 0; i < 60; i++) {
-        if (await evaluate('!!document.querySelector(".account-status").textContent')) break;
+        if (await evaluate('document.querySelector(".account-panel").getAttribute("aria-busy") === "false" && !!document.querySelector(".account-status").textContent')) break;
         await sleep(100);
     }
     assert.equal(await evaluate('document.querySelector(".account-status").textContent'), 'שם המשתמש או הסיסמה שגויים.');
@@ -403,6 +560,49 @@ browser.on('error', error => { launchError = error; });
             if (restored.inventory.equipped.necklace !== equipped.necklace || restored.inventory.equipped.glasses !== equipped.glasses) throw Error('Accessories did not persist');
         })()`);
         console.log('PASS browser: necklace and sunglasses equip, render and persist together');
+        await evaluate(`(async () => {
+            const scene = window.inventoryTestScene;
+            scene.inventoryWindow?.destroy(); scene.inventoryWindow = null;
+            const { showPlayerEmoji } = await import('/src/game/objects/PlayerEmoji.js');
+            scene.emojiButton.emit('pointerdown', null, 0, 0, { stopPropagation() {} });
+            if (!scene.emojiMenu.visible || scene.emojiMenu.list.filter(child => child.getData('emojiChoice') !== undefined).length !== 7) throw Error('Emoji menu missing frames');
+            scene.emojiMenu.list.find(child => child.getData('emojiChoice') === 5).emit('pointerdown', null, 0, 0, { stopPropagation() {} });
+            for (let i = 0; i < 50 && !scene.player.emojiCleanup; i++) await new Promise(resolve => setTimeout(resolve, 20));
+            if (scene.emojiMenu.visible || !scene.player.emojiCleanup) throw Error('Emoji selection did not show local echo');
+            const emoji = scene.children.list.find(child => child.getData('playerEmoji') === 5);
+            scene.player.showMessage('emoji and text');
+            if (!scene.player.chatBubble || emoji.depth <= scene.player.chatBubble.depth) throw Error('Emoji replaced text or rendered behind bubble');
+            const bubble = scene.player.chatBubble;
+            const x = scene.player.container.x;
+            scene.player.container.x += 30;
+            await new Promise(resolve => setTimeout(resolve, 60));
+            if (Math.abs(emoji.x - scene.player.container.x) > 1) throw Error('Emoji did not follow player');
+            showPlayerEmoji(scene.player, 6);
+            if (emoji.scene || scene.player.chatBubble !== bubble) throw Error('Emoji replacement did not preserve text');
+            scene.player.container.x = x;
+            const { clearChatMessage } = await import('/src/game/objects/ChatBubble.js');
+            clearChatMessage(scene.player);
+            await new Promise(resolve => setTimeout(resolve, 4900));
+            if (scene.player.emojiCleanup || scene.children.list.some(child => child.getData('playerEmoji') !== undefined)) throw Error('Emoji timeout did not clean up');
+        })()`);
+        console.log('PASS browser: seven emoji choices, sender echo, animation, movement, independent chat layering, replacement and timeout');
+        await evaluate(`(async () => {
+            const scene = window.inventoryTestScene, player = scene.player;
+            const x = player.container.x, y = player.container.y;
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 100));
+            player.update(100);
+            if (player.container.x !== x || player.container.y !== y || player.getSyncState().isMoving) throw Error('Arrow key moved player');
+            window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, bubbles: true }));
+            player.setMoveTarget(x + 20, y);
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 200));
+            player.update(100);
+            window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37, bubbles: true }));
+            if (Math.abs(player.container.x - (x + 20)) > 1) throw Error('Arrow key interrupted mouse destination');
+            player.container.setPosition(x, y); player.moveTarget = null;
+        })()`);
+        console.log('PASS browser: arrow keys cannot move player or interrupt mouse movement');
         if (process.argv.includes('--world')) {
             await evaluate(`(async () => {
                 const { Game } = await import('/src/game/scenes/Game.js');
@@ -790,8 +990,13 @@ browser.on('error', error => { launchError = error; });
             const scene = window.inventoryTestGame.scene.getScenes(true)[0];
             const { getClothingItem, getClothingTexture } = await import('/src/game/items/Clothing.js');
             await scene.openShopCatalog();
+            if (scene.catalogItems.some(item => getClothingItem(item.id).slot === 'hair')) throw Error('Hair leaked into main catalog');
+            if (scene.inventoryWindow.list.some(child => child.getData('categoryId') === 'hair' || child.getData('categoryId') === 'accessory')) throw Error('Empty catalog category shown');
+            await scene.openShopCatalog('hair');
             const hair = scene.catalogItems.filter(item => getClothingItem(item.id).slot === 'hair');
             if (hair.length !== 6) throw Error('Shop must contain exactly the six requested hairstyles');
+            const categories = scene.inventoryWindow.list.filter(child => child.getData('categoryId'));
+            if (categories.length !== 1 || categories[0].getData('categoryId') !== 'hair' || Number(categories[0].frame.name) !== 2) throw Error('Hair-only category or original sprite frame missing');
             scene.inventoryCategory = 'hair'; scene.inventoryWindow.destroy(); scene.openInventory();
             for (const base of ['eye-cover-girl-hair', 'short-hair']) {
                 for (const [suffix, expected] of [['', 0x7d534c], ['--blonde', 0xe5c36c], ['--black', 0x303541]]) {

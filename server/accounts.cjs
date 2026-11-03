@@ -25,16 +25,16 @@ class Accounts {
         }
     }
 
-    credentials(data) {
+    credentials(data, minNameLength = 3) {
         if (!data || typeof data.username !== 'string' || typeof data.password !== 'string') {
             throw new AccountError('יש להזין שם משתמש וסיסמה.');
         }
         const username = data.username.normalize('NFKC').trim();
-        if (!/^[\p{L}\p{N}_-]{3,20}$/u.test(username)) {
-            throw new AccountError('שם המשתמש צריך להכיל 3–20 אותיות, ספרות, מקף או קו תחתון.');
+        if (!/^[\p{L}\p{N}_-]{3,20}$/u.test(username) || [...username].length < minNameLength) {
+            throw new AccountError(`שם המשתמש צריך להכיל ${minNameLength}-20 אותיות, ספרות, מקף או קו תחתון.`);
         }
         if (data.password.length < 8 || data.password.length > 128) {
-            throw new AccountError('הסיסמה צריכה להכיל 8–128 תווים.');
+            throw new AccountError('הסיסמה צריכה להכיל 8-128 תווים.');
         }
         return { username, key: username.toLowerCase(), password: data.password };
     }
@@ -50,7 +50,7 @@ class Accounts {
     }
 
     async register(data) {
-        const { username, key, password } = this.credentials(data);
+        const { username, key, password } = this.credentials(data, 4);
         const starterColor = data.starterColor ?? starterColors[0];
         const gender = data.gender ?? 'male';
         if (!['male', 'female'].includes(gender)) throw new AccountError('יש לבחור זכר או נקבה.');

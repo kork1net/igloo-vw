@@ -13,6 +13,7 @@ Use these subfolders for other layers (create them as needed):
 | `hair/` | Hair, below hats |
 | `hat/` | Hat |
 | `accessory/` | Accessory, drawn last |
+| `hands/` | Hand-held items, above clothing |
 
 Exception: an equipped item whose source PNG filename ends with `necklace.png`
 (for example `gold-necklace.png`) is drawn immediately below hair, above shirts
@@ -37,16 +38,21 @@ Ownership, currency and equipped items persist on the server; see `inventory.md`
 ## Inventory categories and body colors
 
 The inventory tabs are ordered: player color, hats, hair, accessories, shirts, pants,
-then shoes. Jackets are included under shirts. Each category has its own pages;
+then shoes and hand-held items. Jackets are included under shirts. Each category has its own pages;
 empty categories remain visible with an empty-state message.
 
-The seven UI sheet frames follow this same order, from left to right in the PNG.
+The eight UI sheet frames follow this same order, from left to right in the PNG.
+Add hand-held sheets under `public/assets/items/hands/` using the same aligned
+64x78 cells and optional walking sheets as other clothes. They use an independent
+`hands` slot: one hand-held item can be equipped alongside the rest of the outfit.
+Ownership, trading, saved outfits and multiplayer use the same item system.
+New items are not automatically added to shop catalogs.
 Add hair sheets under `public/assets/items/hair/`, for example `short-brown.png`.
 They use the same 64x78 direction frames, optional walking sheets and color variants
 as clothes. Hair is a separate equipped slot, so wearing a hat does not remove it.
 Hair appears in inventory and catalog previews, player cards and multiplayer, and
 is saved with the outfit. To sell a hairstyle, explicitly add its ID (for example
-`hair/short-brown`) to `server/shop-catalog.json`; new assets are not sold automatically.
+`hair/short-brown`) to `server/hair-catalog.json`; new assets are not sold automatically.
 
 Body colors are defined in `public/assets/items/body-colors.json`, with entries
 such as `{ "id": "blue", "name": "Blue", "tint": "#91ceff" }`. They require no
@@ -115,7 +121,9 @@ colors. For example, `"palette": { "#7d534c": "#e5c36c", "#663931": "#b88a42" }`
 Alpha and unmapped colors are preserved. Each recolored sheet is generated once and
 cached for both renderers, inventory/catalog previews and local/remote characters.
 The two hair metadata files demonstrate this; their six brown/blonde/black items
-are explicitly listed in `server/shop-catalog.json`.
+are explicitly listed in `server/hair-catalog.json` and sold from the hair stand.
+The clothing rack uses `server/shop-catalog.json`. Catalog category buttons only
+appear when their catalog contains items in that category; inventory tabs remain unchanged.
 
 Add `variants` to the base item's metadata file. For example, `pants/blue-jeans.json`:
 
@@ -166,3 +174,9 @@ Check discovery/rendering/sync with `node tests/clothing.cjs` and background mov
 with `node tests/background-movement.cjs`. For a visual check, add a new sheet, open
 two clients, equip it, turn in every direction, open the inventory/player card, and
 change rooms. Clothing remains equipped while moving between rooms.
+
+The color buckets open `server/color-catalog.json` (150 coins per color).
+Hair costs 90 coins and clothing costs 35 coins. Both black shirts, black jeans
+and black shorts cost 55 coins. All five shorts colors are in the clothing catalog.
+Individual prices override the category default via `itemPrices`. Prices are configured in
+`server/economy.json` and validated by the server when purchasing.

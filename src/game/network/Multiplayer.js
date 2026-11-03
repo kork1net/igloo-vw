@@ -1,4 +1,7 @@
+import rankSettings from '../../../shared/rank-settings.json';
+import { adminStyle, stylePlayerName } from '../ui/AdminStyle';
 import { showChatMessage, updateChatMessage } from '../objects/ChatBubble';
+import { showPlayerEmoji } from '../objects/PlayerEmoji';
 import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
 
 import { io } from 'socket.io-client';
@@ -20,7 +23,7 @@ class RemotePlayer {
         this.isMoving = Boolean(data.isMoving);
         this.isRunning = Boolean(data.isRunning);
         this.username = data.username || 'Player';
-        this.level = Math.max(1, Math.min(3, data.level || 1));
+        this.level = Math.max(1, Math.min(rankSettings.maxLevel, data.level || 1));
         this.rankingPoints = data.rankingPoints ?? 0;
         this.pointsToNextLevel = data.pointsToNextLevel ?? 0;
         this.gender = data.gender === 'female' ? 'female' : 'male';
@@ -38,10 +41,11 @@ class RemotePlayer {
             fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontStyle: 'bold',
             fontSize: '17px',
-            color: '#17324d',
+            color: data.isAdmin === true ? adminStyle.text : '#17324d',
             stroke: '#ffffff',
             strokeThickness: 3
         }).setOrigin(0.5);
+        stylePlayerName(this.nameText, data.isAdmin);
 
         this.container.add([shadow, this.body, this.nameText]);
         this.adminBadge = createAdminBadge(scene, this.container, data.isAdmin);
@@ -64,11 +68,12 @@ class RemotePlayer {
     }
 
     setState(data) {
-        if (Number.isInteger(data.level)) this.level = Math.max(1, Math.min(3, data.level));
+        if (Number.isInteger(data.level)) this.level = Math.max(1, Math.min(rankSettings.maxLevel, data.level));
         if (Number.isFinite(data.rankingPoints)) this.rankingPoints = data.rankingPoints;
         if (Number.isFinite(data.pointsToNextLevel)) this.pointsToNextLevel = data.pointsToNextLevel;
         this.minigameBadge.setVisible(Boolean(data.minigame));
         this.adminBadge.setVisible(data.isAdmin === true);
+        stylePlayerName(this.nameText, data.isAdmin);
         this.targetX = data.x ?? this.targetX;
         this.targetY = data.y ?? this.targetY;
 
@@ -158,6 +163,10 @@ export default class Multiplayer {
         }
     }
 
+    sendEmoji(emoji) {
+        if (this.socket?.connected) this.socket.emit('playerEmoji', { emoji });
+    }
+
     syncLocalProfile() {
         if (!this.socket?.connected || !this.scene.player) return;
 
@@ -192,7 +201,11 @@ export default class Multiplayer {
             if (!this.socket?.connected) { reject(new Error('אין חיבור לשרת המשחק.')); return; }
             this.socket.timeout(5000).emit(event, data, (error, result) => {
                 if (error) { reject(new Error('לא התקבלה תשובה מהשרת. נסו שוב.')); return; }
-                if (!result?.ok) { reject(new Error(result?.error || 'הפעולה נכשלה.')); return; }
+                if (!result?.ok) {
+                    const failure = new Error(result?.error || 'הפעולה נכשלה.');
+                    failure.code = result?.code;
+                    reject(failure); return;
+                }
                 this.applyInventory(result.inventory);
                 resolve(result);
             });
@@ -246,6 +259,7 @@ export default class Multiplayer {
         this.socket.on('backgroundState', state => this.applyBackgroundState(state));
 
         this.socket.on('currentPlayers', (players) => {
+            this.scene.setVanishState(players[this.socket.id]?.vanished === true);
             this.scene.player.setAdmin(players[this.socket.id]?.isAdmin);
             this.scene.player.setMinigame(players[this.socket.id]?.minigame);
             for (const [id, data] of Object.entries(players)) {
@@ -254,6 +268,8 @@ export default class Multiplayer {
                 }
             }
         });
+
+        this.socket.on('vanishState', state => this.scene.setVanishState(state.active === true));
 
         this.socket.on('playerJoined', (data) => {
             if (data.id !== this.socket.id) {
@@ -276,6 +292,11 @@ export default class Multiplayer {
             if (!data || typeof data.message !== 'string' || !data.message.trim()) return;
             this.remotePlayers.get(data.id)?.showMessage(data.message);
             this.scene.sound.play('ui-chat');
+        });
+        this.socket.on('playerEmoji', data => {
+            if (!data || typeof data.id !== 'string') return;
+            const owner = data.id === this.socket.id ? this.scene.player : this.remotePlayers.get(data.id);
+            showPlayerEmoji(owner, data.emoji);
         });
 
         this.socket.on('playerLeft', (id) => {

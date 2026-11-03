@@ -1,4 +1,4 @@
-import { openHtmlWindow, closeHtmlWindow } from './WindowTransition';
+import { mountModal } from './AdminGrants';
 import { applyHtmlRarityEffect } from './ItemRarityEffect';
 
 export async function openRarityManager(scene) {
@@ -14,43 +14,14 @@ export async function openRarityManager(scene) {
         <p class="rarity-status" role="status">טוען פריטים...</p>
         <div class="rarity-list"></div>
     </section>`;
-    scene.rarityManager = overlay;
-    const keyboardEnabled = scene.input.keyboard.enabled || scene.chatInput?.node === document.activeElement;
-    scene.input.keyboard.enabled = false;
-    scene.chatInput?.setVisible(false);
     const status = overlay.querySelector('.rarity-status');
     const close = (animate = true) => {
         if (overlay.windowClosing && animate) return;
         if (animate) scene.sound.play('ui-close');
-        closeHtmlWindow(overlay, () => {
-            scene.events.off('shutdown', shutdown);
-            if (scene.rarityManager !== overlay) return;
-            scene.rarityManager = null;
-            scene.input.keyboard.enabled = keyboardEnabled;
-            scene.chatInput?.setVisible(true);
-        }, animate);
+        dismiss(animate);
     };
-    const shutdown = () => close(false);
-    scene.events.once('shutdown', shutdown);
-    overlay.querySelector('button').addEventListener('click', () => close());
+    const dismiss = mountModal(scene, overlay, () => close(), 'rarityManager');
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
-    overlay.addEventListener('pointerdown', event => event.stopPropagation());
-    overlay.addEventListener('keydown', event => {
-        event.stopPropagation();
-        if (event.key === 'Escape') close();
-        if (event.key === 'Tab') {
-            const controls = [...overlay.querySelectorAll('button, input, select')].filter(control => !control.disabled && !control.closest('[hidden]'));
-            const index = controls.indexOf(document.activeElement);
-            if ((event.shiftKey && index <= 0) || (!event.shiftKey && index === controls.length - 1)) {
-                event.preventDefault();
-                controls[event.shiftKey ? controls.length - 1 : 0]?.focus();
-            }
-        }
-    });
-    document.getElementById('game-container').append(overlay);
-    openHtmlWindow(overlay);
-    overlay.querySelector('.rarity-search').focus();
-    scene.input.keyboard.enabled = false;
     try {
         const result = await scene.multiplayer.requestInventory('admin:items', {});
         if (!overlay.isConnected || overlay.windowClosing) return;

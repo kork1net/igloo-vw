@@ -1,5 +1,6 @@
-// Keep future thresholds configured, but only the first three ranks are available.
-const ranks = require('../shared/ranks.json').slice(0, 3);
+// Keep future thresholds configured; unlock ranks through the shared limit.
+const { maxLevel } = require('../shared/rank-settings.json');
+const ranks = require('../shared/ranks.json').slice(0, maxLevel);
 
 function rankForPoints(points, isAdmin = false) {
     let index = isAdmin === true ? ranks.length - 1 : 0;

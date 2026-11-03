@@ -1,6 +1,24 @@
 // Stable IDs will also identify residents when quest chains are added.
 export const residents = [
     {
+        id: 'rani',
+        room: 'Shop',
+        name: 'רני',
+        role: 'בעל החנות',
+        texture: 'resident:rani',
+        image: 'assets/residents/rani.png',
+        displayHeight: 148,
+        position: { x: 0.32, y: 0.45 },
+        greeting: 'שלום, אני רני, בעל החנות. אני מקפיד על הסדר ועל האיכות של כל פריט שמגיע למדפים שלי. תבחרו בנחת, ואם תצטרכו עצה, אני כאן. משמח אותי לראות אתכם מתקדמים ומוצאים את הסגנון שלכם. יש לכם במה להתגאות.',
+        questChainIds: [],
+        speechLines: [
+            'בחנות שלי, כל פריט נבדק עד הפרט האחרון.',
+            'קחו את הזמן. בחירה טובה שווה את זה.',
+            'אתם מתקדמים יפה. יש לכם במה להתגאות.',
+            'טוב לראות אתכם. אם צריך עזרה, אני כאן.'
+        ]
+    },
+    {
         id: 'mia',
         room: 'Cafe',
         name: 'מיה',

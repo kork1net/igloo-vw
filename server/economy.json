@@ -1,4 +1,12 @@
 {
   "startingCurrency": 100,
-  "itemPrice": 10
+  "itemPrice": 35,
+  "hairPrice": 90,
+  "colorPrice": 150,
+  "itemPrices": {
+    "shirt/black-shirt": 55,
+    "shirt/simple-red-shirt--black": 55,
+    "pants/blue-jeans--black": 55,
+    "pants/blue-shorts--black": 55
+  }
 }

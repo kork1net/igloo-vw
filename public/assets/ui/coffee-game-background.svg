@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" preserveAspectRatio="none" shape-rendering="crispEdges">
+  <path fill="#e1f0f7" d="M0 0H960V386H0Z"/>
+  <path fill="#f0f9fc" d="M0 0H960V6H944V12H16V6H0Z"/>
+  <path fill="#c5dde8" d="M0 378H960V386H0Z"/>
+  <path fill="#dfd3be" d="M0 386H960V540H0Z"/>
+  <path d="M0 462H960M0 504H960" fill="none" stroke="#cdbd9f" stroke-width="3"/>
+</svg>

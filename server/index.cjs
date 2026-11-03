@@ -4,11 +4,15 @@ const { Server } = require('socket.io');
 const { buildCatalog } = require('../scripts/item-catalog.cjs');
 const { Accounts, handleAccountSocket } = require('./accounts.cjs');
 const accounts = new Accounts(process.env.VW_ACCOUNTS_FILE);
-const { getSquareColliders, resolveMovement } = require('../shared/collision.js');
+const { getSquareColliders, getShopInteriorColliders, resolveMovement } = require('../shared/collision.js');
 const square = require('../shared/square.json');
+const emojiConfig = require('../shared/emojis.json');
 const squareColliders = getSquareColliders(square);
+const shopInteriorColliders = getShopInteriorColliders();
 const { SnowGames } = require('./snow-game.cjs');
 const snowGames = new SnowGames();
+const { CoffeeGames } = require('./coffee-game.cjs');
+const coffeeGames = new CoffeeGames();
 const { Rarities } = require('./rarities.cjs');
 const rarities = new Rarities(process.env.VW_RARITIES_FILE
     || (process.env.VW_ACCOUNTS_FILE ? process.env.VW_ACCOUNTS_FILE + '.rarities.json' : undefined));
@@ -36,6 +40,14 @@ const io = new Server(port, {
 });
 
 const players = new Map();
+const vanishedAdmins = new Set();
+function broadcastPlayer(player, event = 'playerMoved', sender = null) {
+    if (player.vanished) {
+        if (event === 'playerMoved') io.to(player.id).emit(event, { ...player });
+        return;
+    }
+    (sender ? sender.to(player.room) : io.to(player.room)).emit(event, { ...player });
+}
 const adminItemSets = new Map();
 const { Trades } = require('./trades.cjs');
 const trades = new Trades({ inventory: inventories, getCatalog, getPlayer: id => players.get(id),
@@ -56,7 +68,7 @@ function pushInventory(user) {
         player.level = inventory.level;
         player.rankingPoints = inventory.rankingPoints;
         player.pointsToNextLevel = inventory.pointsToNextLevel;
-        io.to(player.room).emit('playerMoved', { ...player });
+        broadcastPlayer(player);
     }
     return inventory;
 }
@@ -84,11 +96,20 @@ io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
 
     const room = ['Shop', 'Cafe'].includes(socket.handshake.auth?.room) ? socket.handshake.auth.room : 'Game';
+    const roomColliders = room === 'Game' ? squareColliders : room === 'Shop' ? shopInteriorColliders : [];
     socket.join(room);
     socket.join(`user:${user.id}`);
     const initial = socket.handshake.auth?.player || {};
+    let startingPosition = {
+        x: Number.isFinite(initial.x) ? initial.x : 640,
+        y: Number.isFinite(initial.y) ? initial.y : 360
+    };
+    if (roomColliders.length) startingPosition = resolveMovement(startingPosition, startingPosition, roomColliders);
     let inventory;
-    try { inventory = inventories.snapshot(user, getCatalog()); }
+    try {
+        inventories.rememberRoom(user, room);
+        inventory = inventories.snapshot(user, getCatalog());
+    }
     catch (error) {
         console.error('Cannot load player inventory:', error.code || error.name);
         socket.emit('inventoryError', 'לא ניתן לטעון את תיק החפצים.');
@@ -98,12 +119,13 @@ io.on('connection', (socket) => {
     players.set(socket.id, {
         id: socket.id,
         room,
-        x: Number.isFinite(initial.x) ? initial.x : 640,
-        y: Number.isFinite(initial.y) ? initial.y : 360,
+        x: startingPosition.x,
+        y: startingPosition.y,
         userId: user.id,
         username: user.username,
         gender: user.gender === 'female' ? 'female' : 'male',
         isAdmin: user.isAdmin === true,
+        vanished: user.isAdmin === true && vanishedAdmins.has(user.id),
         equipped: inventory.equipped,
         level: inventory.level,
         rankingPoints: inventory.rankingPoints,
@@ -122,11 +144,13 @@ io.on('connection', (socket) => {
         if (!player || player.minigame === game) return;
         player.minigame = game;
         if (game) trades.cancelForUser(user.id);
-        io.to(room).emit('playerMoved', { ...player });
+        broadcastPlayer(player);
     };
     socket.on('minigame:presence', (request, reply) => {
         if (typeof reply !== 'function') return;
-        if (room !== 'Game' || request?.game !== 'snow-catch' || typeof request.active !== 'boolean') {
+        const validGame = room === 'Game' && request?.game === 'snow-catch'
+            || room === 'Cafe' && request?.game === 'coffee-memory';
+        if (!validGame || typeof request.active !== 'boolean') {
             reply({ ok: false, error: 'משחקון לא תקין.' }); return;
         }
         setMinigame(request.active ? request.game : null);
@@ -147,11 +171,17 @@ io.on('connection', (socket) => {
         }
         return state;
     };
-    for (const action of ['snow:start', 'snow:state', 'snow:cancel']) {
+    for (const action of ['snow:start', 'snow:state', 'snow:finish', 'snow:cancel']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
             if (room !== 'Game') { reply({ ok: false, error: 'המשחק זמין בכיכר הראשית בלבד.' }); return; }
             try {
+                if (action === 'snow:finish') {
+                    const round = snowGames.get(user.id, socket.id);
+                    if (request?.id !== round.id) throw new Error('הסיבוב אינו פעיל.');
+                    round.finish();
+                    stopSnowTimer();
+                }
                 if (action === 'snow:cancel') {
                     if (request?.id && snowGames.get(user.id, socket.id).id !== request.id) {
                         reply({ ok: true }); return;
@@ -184,6 +214,32 @@ io.on('connection', (socket) => {
         } catch { /* A stale input from a closed round is ignored. */ }
     });
     socket.on('disconnect', () => { stopSnowTimer(); snowGames.cancel(user.id, socket.id); });
+    for (const action of ['coffee:start', 'coffee:state', 'coffee:choose', 'coffee:clear', 'coffee:finish', 'coffee:cancel']) {
+        socket.on(action, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            if (room !== 'Cafe') { reply({ ok: false, error: 'המשחק זמין בבית הקפה בלבד.' }); return; }
+            try {
+                if (action === 'coffee:cancel') {
+                    coffeeGames.cancel(user.id, socket.id); setMinigame(null);
+                    reply({ ok: true }); return;
+                }
+                const round = action === 'coffee:start' ? coffeeGames.start(user.id, socket.id)
+                    : coffeeGames.get(user.id, socket.id);
+                if (action !== 'coffee:start' && request?.id !== round.id) throw new Error('המשחק אינו פעיל.');
+                if (action === 'coffee:choose') round.choose(request.ingredient);
+                if (action === 'coffee:clear') round.clear();
+                if (action === 'coffee:finish') round.finish();
+                let state = round.snapshot();
+                if (state.phase === 'finished' && !round.result) {
+                    round.result = inventories.rewardCoffee(user, round); pushInventory(user);
+                    state = round.snapshot();
+                }
+                setMinigame(state.phase === 'finished' ? null : 'coffee-memory');
+                reply({ ok: true, state });
+            } catch (error) { reply({ ok: false, error: error.code ? 'לא ניתן לשמור את התוצאה. נסו שוב.' : error.message }); }
+        });
+    }
+    socket.on('disconnect', () => coffeeGames.cancel(user.id, socket.id));
     for (const action of ['admin:items', 'admin:setItemRarity']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
@@ -251,7 +307,7 @@ io.on('connection', (socket) => {
 
     socket.on('admin:grant', (request, reply) => {
         if (typeof reply !== 'function') return;
-        if (!user.isAdmin) { reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return; }
+        if (!accounts.authenticate(token)?.isAdmin) { reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return; }
         try {
             if (request?.scope === 'room') {
                 const recipients = [...players.values()].filter(player => player.room === room)
@@ -278,7 +334,7 @@ io.on('connection', (socket) => {
             acknowledge({ ok: true, inventory: pushInventory(user) });
         } catch (error) {
             if (!(error instanceof InventoryError)) console.error('Inventory save failed:', error.code || error.name);
-            acknowledge({ ok: false, error: error instanceof InventoryError
+            acknowledge({ ok: false, code: error instanceof InventoryError ? error.code : undefined, error: error instanceof InventoryError
                 ? error.message : 'לא ניתן לשמור את השינוי. נסו שוב.' });
         }
     };
@@ -309,24 +365,40 @@ io.on('connection', (socket) => {
     socket.on('shop:purchase', (request, acknowledge) => inventoryAction(() => {
         if (room !== 'Shop') throw new InventoryError('אפשר לרכוש פריטים רק מתוך החנות.');
         if (typeof request?.itemId !== 'string') throw new InventoryError('פריט לא תקין.');
-        inventories.purchase(user, request.itemId, getCatalog());
+        inventories.purchase(user, request.itemId, getCatalog(), request?.catalogId ?? 'main');
     }, acknowledge));
     socket.on('shop:catalog', (request, acknowledge) => {
         if (typeof acknowledge !== 'function') return;
         if (room !== 'Shop') { acknowledge({ ok: false, error: 'הקטלוג זמין מתוך החנות בלבד.' }); return; }
         try {
-            acknowledge({ ok: true, items: inventories.shopCatalog(getCatalog()),
+            const catalogId = request?.catalogId ?? 'main';
+            acknowledge({ ok: true, catalogId, items: inventories.shopCatalog(getCatalog(), catalogId),
                 inventory: inventories.snapshot(user, getCatalog()) });
         } catch { acknowledge({ ok: false, error: 'לא ניתן לטעון את הקטלוג.' }); }
     });
 
     socket.emit('currentPlayers', Object.fromEntries(
-        [...players].filter(([, player]) => player.room === room)
+        [...players].filter(([id, player]) => player.room === room && (!player.vanished || id === socket.id))
     ));
 
-    socket.to(room).emit('playerJoined', {
-        id: socket.id,
-        ...players.get(socket.id)
+    broadcastPlayer(players.get(socket.id), 'playerJoined', socket);
+
+    socket.on('admin:vanish', (request, reply) => {
+        if (typeof reply !== 'function') return;
+        if (!accounts.authenticate(token)?.isAdmin || typeof request?.active !== 'boolean') {
+            reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return;
+        }
+        if (request.active) vanishedAdmins.add(user.id);
+        else vanishedAdmins.delete(user.id);
+        for (const player of players.values()) {
+            if (player.userId !== user.id || player.vanished === request.active) continue;
+            player.vanished = request.active;
+            if (request.active) io.to(player.room).emit('playerLeft', player.id);
+            else broadcastPlayer(player, 'playerJoined');
+            io.to(player.id).emit('vanishState', { active: request.active });
+        }
+        if (request.active) trades.cancelForUser(user.id);
+        reply({ ok: true, active: request.active });
     });
 
     socket.on('playerProfile', (profile = {}) => {
@@ -334,13 +406,22 @@ io.on('connection', (socket) => {
         const player = players.get(socket.id);
         if (!player) return;
 
-        socket.to(room).emit('playerMoved', {
-            id: socket.id,
-            ...player
-        });
+        broadcastPlayer(player, 'playerMoved', socket);
+    });
+
+    let lastEmojiAt = -Infinity;
+    socket.on('playerEmoji', request => {
+        if (players.get(socket.id)?.vanished) return;
+        if (!players.has(socket.id) || !Number.isInteger(request?.emoji)
+            || request.emoji < 0 || request.emoji >= emojiConfig.frames.length) return;
+        const now = Date.now();
+        if (now - lastEmojiAt < emojiConfig.cooldown) return;
+        lastEmojiAt = now;
+        io.to(room).emit('playerEmoji', { id: socket.id, emoji: request.emoji });
     });
 
     socket.on('chatMessage', (message) => {
+        if (players.get(socket.id)?.vanished) return;
         if (typeof message !== 'string' || !players.has(socket.id)) return;
         const text = message.trim().slice(0, 100);
         if (!text) return;
@@ -353,10 +434,11 @@ io.on('connection', (socket) => {
 
         if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y)) return;
 
-        const destination = room === 'Game' ? resolveMovement(player, {
-            x: Math.max(25, Math.min(1255, position.x)),
-            y: Math.max(25, Math.min(695, position.y))
-        }, squareColliders) : position;
+        const margin = room === 'Game' ? 25 : 65;
+        const destination = roomColliders.length ? resolveMovement(player, {
+            x: Math.max(margin, Math.min(1280 - margin, position.x)),
+            y: Math.max(margin, Math.min(720 - margin, position.y))
+        }, roomColliders) : position;
         player.x = destination.x;
         player.y = destination.y;
         player.direction = Number.isInteger(position.direction) && position.direction >= 0 && position.direction <= 6 ? position.direction : player.direction;
@@ -364,10 +446,7 @@ io.on('connection', (socket) => {
         player.isMoving = Boolean(position.isMoving);
         player.isRunning = Boolean(position.isRunning);
 
-        socket.to(room).emit('playerMoved', {
-            id: socket.id,
-            ...player
-        });
+        broadcastPlayer(player, 'playerMoved', socket);
     };
 
     let background = null;
@@ -399,8 +478,8 @@ io.on('connection', (socket) => {
             player.isMoving = false;
             player.isRunning = false;
         }
-        if (room === 'Game') {
-            const resolved = resolveMovement(previous, player, squareColliders);
+        if (roomColliders.length) {
+            const resolved = resolveMovement(previous, player, roomColliders);
             player.x = resolved.x;
             player.y = resolved.y;
             if (target && delta > 0 && Math.hypot(player.x - previous.x, player.y - previous.y) < 0.01) {
@@ -409,7 +488,7 @@ io.on('connection', (socket) => {
                 player.isRunning = false;
             }
         }
-        socket.to(room).emit('playerMoved', { ...player });
+        broadcastPlayer(player, 'playerMoved', socket);
         socket.emit('backgroundState', { ...player });
     };
 
@@ -447,7 +526,7 @@ io.on('connection', (socket) => {
         clearInterval(backgroundTimer);
         players.delete(socket.id);
         if (![...players.values()].some(player => player.userId === user.id)) adminItemSets.delete(user.id);
-        io.to(room).emit('playerLeft', socket.id);
+        if (!vanishedAdmins.has(user.id)) io.to(room).emit('playerLeft', socket.id);
 
         console.log('Player disconnected:', socket.id);
     });

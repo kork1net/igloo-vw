@@ -2,6 +2,7 @@ import { showChatMessage, updateChatMessage } from './ChatBubble';
 import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
 import { Math as PhaserMath } from 'phaser';
 import { createAdminBadge } from './AdminBadge';
+import { adminStyle, stylePlayerName } from '../ui/AdminStyle';
 import { createMinigameBadge } from './MinigameBadge';
 import { resolveMovement } from '../../../shared/collision';
 
@@ -38,14 +39,15 @@ export class Player {
         this.body.setOrigin(0.5, 1);
         this.body.setScale(1);
         // Username
-        const name = scene.add.text(0, 37, username, {
+        const name = this.nameText = scene.add.text(0, 37, username, {
             fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
             fontStyle: 'bold',
             fontSize: '17px',
-            color: '#17324d',
+            color: scene.registry.get('auth')?.user?.isAdmin ? adminStyle.text : '#17324d',
             stroke: '#ffffff',
             strokeThickness: 3
         }).setOrigin(0.5);
+        stylePlayerName(name, scene.registry.get('auth')?.user?.isAdmin);
 
         this.container.add([
             shadow,
@@ -59,8 +61,8 @@ export class Player {
         this.minigameBadge = createMinigameBadge(scene, this.container);
         this.container.setDepth(10);
 
-        // Keyboard controls
-        this.cursors = scene.input.keyboard.createCursorKeys();
+        // Keep the shared input-reset interface; world movement is mouse-only.
+        this.cursors = {};
 
         scene.input.keyboard.on('keydown-P', () => {
             scene.game.renderer.snapshot((image) => {
@@ -79,6 +81,7 @@ export class Player {
 
     setAdmin(isAdmin) {
         this.adminBadge.setVisible(isAdmin === true);
+        stylePlayerName(this.nameText, isAdmin);
     }
 
     setMinigame(game) {
@@ -93,14 +96,7 @@ export class Player {
         const inventory = this.scene.registry.get('inventory') || {};
         const equipped = inventory.equipped || {};
 
-        let isMoving = false;
-        const keyboardActive =
-            this.cursors.left.isDown ||
-            this.cursors.right.isDown ||
-            this.cursors.up.isDown ||
-            this.cursors.down.isDown;
-
-        isMoving = keyboardActive || !!this.moveTarget;
+        const isMoving = !!this.moveTarget;
 
         return {
             x: this.container.x,
@@ -195,44 +191,14 @@ export class Player {
     update(delta) {
         const previousX = this.container.x;
         const previousY = this.container.y;
-        let dx = 0;
-        let dy = 0;
-
-        // Keyboard input
-        if (this.cursors.left.isDown) dx -= 1;
-        if (this.cursors.right.isDown) dx += 1;
-        if (this.cursors.up.isDown) dy -= 1;
-        if (this.cursors.down.isDown) dy += 1;
-
-        const keyboardActive = dx !== 0 || dy !== 0;
         let isMoving = false;
-
-        // Keyboard movement always uses walking speed
-        if (keyboardActive) {
-            this.isRunning = false;
-            this.moveTarget = null;
-        }
-
-        // Calculate speed after checking keyboard input
         const currentSpeed = this.isRunning
             ? this.runSpeed
             : this.speed;
 
         const movement = currentSpeed * delta / 1000;
 
-        if (keyboardActive) {
-            isMoving = true;
-
-            const length = Math.hypot(dx, dy);
-            dx /= length;
-            dy /= length;
-
-            this.updateDirection(dx, dy);
-
-            this.container.x += dx * movement;
-            this.container.y += dy * movement;
-        }
-        else if (this.moveTarget) {
+        if (this.moveTarget) {
             const distanceX = this.moveTarget.x - this.container.x;
             const distanceY = this.moveTarget.y - this.container.y;
 

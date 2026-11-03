@@ -1,0 +1,9 @@
+{
+  "variants": [
+    {
+      "id": "pink",
+      "name": "pink-shirt",
+      "palette": { "#d35151": "#d35d9f", "#b43e3e": "#b44884", "#7b1e1e": "#7b2455" }
+    }
+  ]
+}

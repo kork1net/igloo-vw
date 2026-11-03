@@ -3,8 +3,8 @@ const config = require('../shared/snow-catch.json');
 
 function rewards(score, catches) {
     if (catches <= 0 || score <= 0) return { coins: 0, rankingPoints: 0 };
-    return { coins: Math.min(8, 2 + Math.floor(score / 70)),
-        rankingPoints: Math.min(20, 5 + Math.floor(score / 30)) };
+    return { coins: 1 + Math.floor(score / 110),
+        rankingPoints: 2 + Math.floor(score / 60) };
 }
 
 class SnowRound {
@@ -18,6 +18,7 @@ class SnowRound {
         this.targetX = this.x;
         this.score = 0;
         this.catches = 0;
+        this.hits = [];
         this.result = null;
         this.flakes = [];
         for (let at = 500; at < config.duration - 1500; at += Math.max(380, 760 - at / 100)) {
@@ -35,6 +36,7 @@ class SnowRound {
     }
 
     advance() {
+        if (this.finishedEarly) return;
         const end = Math.min(config.duration, Math.max(this.elapsed, this.clock() - this.startedAt));
         // Fixed small steps prevent missing catches after a delayed timer/background tab.
         while (this.elapsed < end) {
@@ -47,6 +49,9 @@ class SnowRound {
                 if (crossing > next) continue;
                 flake.resolved = true;
                 if (Math.abs(flake.x - this.x) <= config.basketWidth / 2 + 9) {
+                    // Preserve each catch identity, including ice hits at zero score.
+                    // There is at most one entry per spawned item in this round.
+                    this.hits.push({ id: flake.id, type: flake.type, at: next });
                     this.score = Math.max(0, this.score + config.points[flake.type]);
                     if (flake.type !== 'ice') this.catches++;
                 }
@@ -55,11 +60,17 @@ class SnowRound {
         }
     }
 
+    finish() {
+        this.advance();
+        if (this.elapsed < config.duration) this.finishedEarly = true;
+    }
+
     snapshot() {
         this.advance();
-        return { id: this.id, phase: this.elapsed >= config.duration ? 'finished' : 'playing',
-            remaining: Math.max(0, config.duration - this.elapsed), score: this.score,
+        return { id: this.id, phase: this.finishedEarly || this.elapsed >= config.duration ? 'finished' : 'playing',
+            remaining: this.finishedEarly ? 0 : Math.max(0, config.duration - this.elapsed), score: this.score,
             catches: this.catches, basketX: this.x, result: this.result,
+            hits: this.hits.map(hit => ({ ...hit })),
             flakes: this.flakes.filter(flake => !flake.resolved && flake.at <= this.elapsed)
                 .map(flake => ({ id: flake.id, x: flake.x,
                     y: -16 + (this.elapsed - flake.at) / 1000 * flake.speed,

@@ -3,6 +3,8 @@ import { createQuestButton } from './QuestButton';
 import { createCoinIcon } from './CoinIcon';
 import { createRankingIcon } from './RankingIcon';
 
+const modalStates = new WeakMap();
+
 function createOverlay(title, extraClass = '') {
     const overlay = document.createElement('div');
     overlay.className = `resident-screen admin-grant-screen ${extraClass}`;
@@ -17,40 +19,66 @@ function createOverlay(title, extraClass = '') {
 }
 
 export function mountModal(scene, overlay, dismiss, ownerKey = 'adminModal') {
-    const pointerEnabled = scene.input.enabled;
-    const keyboardEnabled = scene.input.keyboard.enabled || scene.chatInput?.node === document.activeElement;
-    const chatVisible = scene.chatInput?.visible;
+    let state = modalStates.get(scene);
+    if (!state) {
+        state = {
+            pointerEnabled: scene.input.enabled,
+            keyboardEnabled: scene.input.keyboard.enabled || scene.chatInput?.node === document.activeElement,
+            chatVisible: scene.chatInput?.visible,
+            focus: document.activeElement,
+            parents: new Map(), layers: []
+        };
+        modalStates.set(scene, state);
+    }
     const focus = document.activeElement;
-    const parents = [...document.querySelectorAll('.resident-screen')].map(element => [element, element.inert]);
-    parents.forEach(([element]) => { element.inert = true; });
+    for (const element of document.querySelectorAll('.resident-screen')) {
+        if (!state.parents.has(element) && !state.layers.some(layer => layer.overlay === element)) {
+            state.parents.set(element, element.inert);
+        }
+    }
+    const layer = { overlay, ownerKey, zIndex: overlay.style.zIndex };
+    state.layers.push(layer);
+    const syncLayers = () => {
+        const top = state.layers.at(-1);
+        for (const [element, inert] of state.parents) {
+            if (element.isConnected) element.inert = top ? true : inert;
+        }
+        for (const entry of state.layers) entry.overlay.inert = entry !== top;
+        scene.input.enabled = top ? false : state.pointerEnabled;
+        scene.input.keyboard.enabled = top ? false : state.keyboardEnabled;
+        scene.chatInput?.setVisible(top ? false : state.chatVisible ?? true);
+    };
+    syncLayers();
     scene[ownerKey] = overlay;
     scene.player.moveTarget = null;
     scene.player.isMoving = false;
     scene.pendingTransition = null;
     Object.values(scene.player.cursors || {}).forEach(key => key.reset?.());
-    scene.input.enabled = false;
-    scene.input.keyboard.enabled = false;
-    scene.chatInput?.setVisible(false);
     const close = (animate = true) => closeHtmlWindow(overlay, () => {
         scene.events.off('shutdown', shutdown);
-        parents.forEach(([element, inert]) => { if (element.isConnected) element.inert = inert; });
-        if (scene[ownerKey] !== overlay) return;
-        scene[ownerKey] = null;
-        scene.input.enabled = pointerEnabled;
-        scene.input.keyboard.enabled = keyboardEnabled;
-        scene.chatInput?.setVisible(chatVisible ?? true);
-        if (focus?.isConnected && !focus.closest('[inert]')) focus.focus();
+        state.layers = state.layers.filter(entry => entry !== layer);
+        if (scene[ownerKey] === overlay) {
+            scene[ownerKey] = state.layers.findLast(entry => entry.ownerKey === ownerKey)?.overlay || null;
+        }
+        syncLayers();
+        overlay.style.zIndex = layer.zIndex;
+        if (!state.layers.length) modalStates.delete(scene);
+        const target = state.layers.length ? focus : state.focus;
+        const top = state.layers.at(-1)?.overlay;
+        if (target?.isConnected && !target.closest('[inert]') && (!top || top.contains(target))) target.focus();
+        if (top) scene.input.keyboard.enabled = false;
     }, animate);
     const shutdown = () => close(false);
     scene.events.once('shutdown', shutdown);
     overlay.dismiss = close;
-    overlay.querySelector('.resident-close').addEventListener('click', dismiss);
+    overlay.querySelector('.resident-close')?.addEventListener('click', dismiss);
     overlay.addEventListener('pointerdown', event => event.stopPropagation());
     overlay.addEventListener('keydown', event => {
         event.stopPropagation();
         if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
         if (event.key === 'Tab') {
-            const controls = [...overlay.querySelectorAll('button, input, select')].filter(element => !element.disabled);
+            const controls = [...overlay.querySelectorAll('button, input, select')]
+                .filter(element => !element.disabled && !element.closest('[hidden]'));
             const index = controls.indexOf(document.activeElement);
             if ((event.shiftKey && index <= 0) || (!event.shiftKey && index === controls.length - 1)) {
                 event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0]?.focus();
@@ -58,19 +86,24 @@ export function mountModal(scene, overlay, dismiss, ownerKey = 'adminModal') {
         }
     });
     document.getElementById('game-container').append(overlay);
+    const topZ = Math.max(0, ...[...document.querySelectorAll('.resident-screen')]
+        .filter(element => element !== overlay).map(element => Number(getComputedStyle(element).zIndex) || 0));
+    if ((Number(getComputedStyle(overlay).zIndex) || 0) <= topZ) overlay.style.zIndex = String(topZ + 1);
     openHtmlWindow(overlay);
-    (overlay.querySelector('input') || overlay.querySelector('.resident-close')).focus();
+    (overlay.querySelector('input') || overlay.querySelector('.resident-close') || overlay.querySelector('button'))?.focus();
+    scene.input.keyboard.enabled = false;
     return close;
 }
 
 export function openAdminGrants(scene) {
     if (!scene.registry.get('auth')?.user?.isAdmin || scene.adminModal) return;
-    const overlay = createOverlay('הענקת מתנות לשחקנים');
+    const overlay = createOverlay('מתנות וניהול יתרות');
     const content = overlay.querySelector('.admin-grant-content');
     content.innerHTML = `<form class="admin-grant-form">
-        <label>למי לשלוח?<select name="scope"><option value="player">שחקן מסוים</option><option value="room">כל השחקנים בחדר</option></select></label>
+        <label>פעולה<select name="operation"><option value="add">הענקה</option><option value="remove">הפחתה</option></select></label>
+        <label>יעד הפעולה<select name="scope"><option value="player">שחקן מסוים</option><option value="room">כל השחקנים בחדר</option></select></label>
         <label class="admin-recipient">שם השחקן<input name="username" required maxlength="20" autocomplete="off" /></label>
-        <label>סוג המתנה<select name="kind"><option value="currency">כסף</option><option value="rankingPoints">נקודות דירוג</option><option value="both">כסף ונקודות דירוג</option></select></label>
+        <label>סוג היתרה<select name="kind"><option value="currency">כסף</option><option value="rankingPoints">נקודות דירוג</option><option value="both">כסף ונקודות דירוג</option></select></label>
         <label class="admin-primary-amount"><span class="admin-amount-label">סכום כסף</span><input name="amount" type="number" min="1" max="1000000" step="1" required /></label>
         <label class="admin-ranking-amount" hidden>נקודות דירוג<input name="rankingAmount" type="number" min="1" max="1000000" step="1" disabled /></label>
         <p class="admin-grant-hint"></p>
@@ -82,6 +115,9 @@ export function openAdminGrants(scene) {
     form.append(submit);
     let busy = false, requestId;
     const syncControls = () => {
+        const removing = form.elements.operation.value === 'remove';
+        form.elements.scope.querySelector('[value="room"]').disabled = removing;
+        if (removing) form.elements.scope.value = 'player';
         const room = form.elements.scope.value === 'room';
         const both = form.elements.kind.value === 'both';
         form.dataset.combined = String(both);
@@ -92,7 +128,10 @@ export function openAdminGrants(scene) {
         form.elements.rankingAmount.disabled = !both;
         form.elements.rankingAmount.required = both;
         form.querySelector('.admin-amount-label').textContent = form.elements.kind.value === 'rankingPoints' ? 'נקודות דירוג' : 'סכום כסף';
-        form.querySelector('.admin-grant-hint').textContent = room
+        submit.setAttribute('aria-label', removing ? 'הפחתת יתרה' : 'שליחת מתנה');
+        submit.title = submit.getAttribute('aria-label');
+        form.querySelector('.admin-grant-hint').textContent = removing
+            ? 'הפחתה משחקן מסוים, גם אם אינו מחובר. היתרה לא תרד מתחת לאפס ולא תוצג לו הודעה.' : room
             ? 'כל מי שבחדר הנוכחי יקבל את הכמות שציינתם, כולל המנהל. כל משתמש מקבל פעם אחת. עד 1,000,000 מכל סוג.'
             : 'אפשר להעניק גם לשחקן שאינו מחובר. עד 1,000,000 מכל סוג.';
     };
@@ -107,21 +146,24 @@ export function openAdminGrants(scene) {
         const kind = form.elements.kind.value;
         const amount = Number(form.elements.amount.value);
         const scope = form.elements.scope.value;
+        const operation = form.elements.operation.value;
         const rankingAmount = kind === 'both' ? Number(form.elements.rankingAmount.value) : undefined;
         requestId ||= crypto.randomUUID();
         busy = true;
         const controls = [...form.querySelectorAll('input, select, button')];
         controls.forEach(element => { element.disabled = true; });
-        status.textContent = 'שולח מתנה…';
+        status.textContent = operation === 'remove' ? 'מעדכן יתרה…' : 'שולח מתנה…';
         try {
-            const result = await scene.multiplayer.requestInventory('admin:grant', { id: requestId, scope, username, kind, amount, rankingAmount });
+            const result = await scene.multiplayer.requestInventory('admin:grant', { id: requestId, scope, username, kind, amount, rankingAmount, operation });
             if (!overlay.isConnected) return;
-            status.textContent = scope === 'room'
+            status.textContent = operation === 'remove' ? `היתרה של ${result.username} עודכנה.` : scope === 'room'
                 ? `המתנה נשלחה ל־${result.recipientCount} שחקנים בחדר.`
                 : `המתנה נשלחה ל־${result.username}.`;
             form.elements.amount.value = ''; form.elements.rankingAmount.value = ''; requestId = null;
             scene.sound.play('wood-tap-ui');
-        } catch (error) { if (overlay.isConnected) status.textContent = error.message; }
+        } catch (error) {
+            if (overlay.isConnected) { status.textContent = error.message; scene.sound.play('hurt-sfx'); }
+        }
         finally { busy = false; controls.forEach(element => { element.disabled = false; }); syncControls(); }
     });
 }

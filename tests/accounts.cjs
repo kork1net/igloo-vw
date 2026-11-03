@@ -86,7 +86,7 @@ function request(socket, name, data) {
     assert.equal(players[game.id].level, 1);
     const admin = await request(account, 'auth:register', { username: 'Koko', password });
     assert.equal(admin.user.isAdmin, true);
-    assert.equal(admin.inventory.level, 3);
+    assert.equal(admin.inventory.level, 5);
     assert.equal(admin.inventory.rankingPoints, 0);
     assert.equal(admin.inventory.pointsToNextLevel, 0);
     const catalog = require('../scripts/item-catalog.cjs').buildCatalog();
@@ -94,7 +94,7 @@ function request(socket, name, data) {
     const adminSocket = await client({ token: admin.token, room: 'Game' });
     const adminPlayers = await event(adminSocket, 'currentPlayers');
     assert.equal(adminPlayers[adminSocket.id].isAdmin, true);
-    assert.equal(adminPlayers[adminSocket.id].level, 3);
+    assert.equal(adminPlayers[adminSocket.id].level, 5);
     const observer = await client({ token: registered.token, room: 'Game' });
     await event(observer, 'currentPlayers');
     assert.equal((await request(game, 'admin:items', {})).ok, false);

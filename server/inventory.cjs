@@ -7,7 +7,9 @@ const { starterColors } = require('../shared/registration.json');
 const WHITE = 'body-color/white';
 const { maxItemQuantity } = require('../shared/inventory-rules.json');
 const { rewards, config: snowConfig } = require('./snow-game.cjs');
+const { coffeeRewards } = require('./coffee-game.cjs');
 const { rankForPoints } = require('./ranks.cjs');
+const rooms = require('../shared/rooms.json');
 const { chain, questView, activeQuestStep } = require('./quests.cjs');
 
 class InventoryError extends Error {}
@@ -117,11 +119,18 @@ class Inventories {
         }
         const rankingPoints = profile.rankingPoints || 0;
         const quantities = this.quantities(profile);
-        return { items, quantities: Object.fromEntries(items.map(id => [id, user.isAdmin ? null : quantities[id]])),
+        return { lastRoom: rooms.includes(profile.lastRoom) ? profile.lastRoom : 'Game',
+            items, quantities: Object.fromEntries(items.map(id => [id, user.isAdmin ? null : quantities[id]])),
             unlimitedItems: user.isAdmin === true, maxItemQuantity, equipped, currency: profile.currency, revision: profile.revision || 0,
             rankingPoints, ...rankForPoints(rankingPoints, user.isAdmin), snowBest: profile.snowBest || 0,
             adminGifts: (profile.adminGrants || []).filter(gift => !gift.acknowledged),
             quests: { [chain.id]: questView(profile, user, catalog, equipped) } };
+    }
+
+    rememberRoom(user, room) {
+        if (!rooms.includes(room)) throw new InventoryError('Invalid room');
+        const profile = this.load(user);
+        if (profile.lastRoom !== room) this.persist(user, { ...profile, lastRoom: room });
     }
 
     equip(user, itemId, shouldEquip, catalog) {
@@ -138,18 +147,23 @@ class Inventories {
         return this.snapshot(user, catalog);
     }
 
-    purchase(user, itemId, catalog) {
-        if (!this.shopCatalog(catalog).some(item => item.id === itemId)) {
+    purchase(user, itemId, catalog, catalogId = 'main') {
+        const offer = this.shopCatalog(catalog, catalogId).find(item => item.id === itemId);
+        if (!offer) {
             throw new InventoryError('הפריט אינו זמין לרכישה.');
         }
         const inventory = this.snapshot(user, catalog);
         if (user.isAdmin) throw new InventoryError('למנהלים כבר יש כמות אינסופית מכל הפריטים.');
-        if (inventory.currency < economy.itemPrice) throw new InventoryError('אין לך מספיק מטבעות.');
+        if (inventory.currency < offer.price) {
+            const error = new InventoryError('אין לך מספיק מטבעות.');
+            error.code = 'INSUFFICIENT_FUNDS';
+            throw error;
+        }
         const profile = this.load(user);
         const previousPurchases = profile.purchasedItems || profile.items.filter(id => id !== (user.starterColor || WHITE));
         this.persist(user, { ...profile, ...this.addItem(profile, itemId),
             purchasedItems: [...new Set([...previousPurchases, itemId])],
-            currency: inventory.currency - economy.itemPrice, revision: inventory.revision + 1 });
+            currency: inventory.currency - offer.price, revision: inventory.revision + 1 });
         return this.snapshot(user, catalog);
     }
 
@@ -189,7 +203,7 @@ class Inventories {
     }
 
     rewardSnow(user, round) {
-        if (round.elapsed < snowConfig.duration) throw new InventoryError('הסיבוב עדיין לא הסתיים.');
+        if (round.elapsed < snowConfig.duration && !round.finishedEarly) throw new InventoryError('הסיבוב עדיין לא הסתיים.');
         const profile = this.load(user);
         if (profile.lastSnowRound?.id === round.id) return profile.lastSnowRound;
         const earned = rewards(round.score, round.catches);
@@ -208,6 +222,18 @@ class Inventories {
         this.persist(user, { ...profile, currency: profile.currency + earned.coins,
             rankingPoints, snowBest: result.best, lastSnowRound: result, quests,
             revision: (profile.revision || 0) + 1 });
+        return result;
+    }
+
+    rewardCoffee(user, round) {
+        if (!round.finished) throw new InventoryError('המשחק עדיין לא הסתיים.');
+        const profile = this.load(user);
+        if (profile.lastCoffeeRound?.id === round.id) return profile.lastCoffeeRound;
+        const earned = coffeeRewards(round.score, round.orders);
+        const rankingPoints = (profile.rankingPoints || 0) + earned.rankingPoints;
+        const result = { id: round.id, score: round.score, orders: round.orders, ...earned };
+        this.persist(user, { ...profile, currency: profile.currency + earned.coins,
+            rankingPoints, lastCoffeeRound: result, revision: (profile.revision || 0) + 1 });
         return result;
     }
 
@@ -293,6 +319,8 @@ class Inventories {
     validateGrant(sender, request) {
         if (sender.isAdmin !== true) throw new InventoryError('הפעולה זמינה למנהלים בלבד.');
         if (!request || typeof request.id !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(request.id)
+            || !['add', 'remove'].includes(request.operation ?? 'add')
+            || (request.operation === 'remove' && request.scope === 'room')
             || !['currency', 'rankingPoints', 'both'].includes(request.kind)
             || !Number.isSafeInteger(request.amount) || request.amount < 1 || request.amount > 1000000
             || (request.kind === 'both' && (!Number.isSafeInteger(request.rankingAmount)
@@ -303,23 +331,26 @@ class Inventories {
 
     grant(user, sender, request) {
         this.validateGrant(sender, request);
+        const operation = request.operation ?? 'add';
         const rankingAmount = request.kind === 'both' ? request.rankingAmount : 0;
         const profile = this.load(user);
         const history = profile.adminGrants || [];
         const previous = history.find(gift => gift.id === request.id && gift.senderId === sender.id);
         if (previous) {
-            if (previous.kind !== request.kind || previous.amount !== request.amount
+            if ((previous.operation ?? 'add') !== operation || previous.kind !== request.kind || previous.amount !== request.amount
                 || (previous.rankingAmount || 0) !== rankingAmount) throw new InventoryError('מזהה הבקשה כבר שימש למתנה אחרת.');
             return previous;
         }
-        const currency = request.kind === 'rankingPoints' ? 0 : request.amount;
-        const rankingPoints = request.kind === 'both' ? rankingAmount : request.kind === 'rankingPoints' ? request.amount : 0;
+        const money = request.kind === 'rankingPoints' ? 0 : request.amount;
+        const points = request.kind === 'both' ? rankingAmount : request.kind === 'rankingPoints' ? request.amount : 0;
+        const currency = operation === 'remove' ? -Math.min(profile.currency, money) : money;
+        const rankingPoints = operation === 'remove' ? -Math.min(profile.rankingPoints || 0, points) : points;
         const moneyTotal = profile.currency + currency;
         const rankingTotal = (profile.rankingPoints || 0) + rankingPoints;
         if (!Number.isSafeInteger(moneyTotal) || !Number.isSafeInteger(rankingTotal)) throw new InventoryError('היתרה חורגת מהסכום המותר.');
         const gift = { id: request.id, senderId: sender.id, senderName: sender.username,
             kind: request.kind, amount: request.amount, rankingAmount, currency, rankingPoints,
-            createdAt: Date.now(), acknowledged: false };
+            operation, createdAt: Date.now(), acknowledged: operation === 'remove' };
         this.persist(user, { ...profile, currency: moneyTotal, rankingPoints: rankingTotal, adminGrants: [...history, gift],
             revision: (profile.revision || 0) + 1 });
         return gift;
@@ -327,6 +358,7 @@ class Inventories {
 
     grantRoom(sender, room, request, recipients, onGranted) {
         this.validateGrant(sender, request);
+        if (request.operation === 'remove') throw new InventoryError('ניתן להפחית יתרה משחקן מסוים בלבד.');
         if (!/^[a-zA-Z0-9_-]{1,80}$/.test(sender.id)) throw new InventoryError('מנהל לא תקין.');
         const directory = path.join(this.directory, 'admin-grant-batches');
         const filename = path.join(directory, `${sender.id}-${request.id}.json`);
@@ -361,12 +393,17 @@ class Inventories {
             revision: (profile.revision || 0) + 1 });
     }
 
-    shopCatalog(catalog) {
+    shopCatalog(catalog, catalogId = 'main') {
+        if (!['main', 'hair', 'colors'].includes(catalogId)) throw new InventoryError('קטלוג לא תקין.');
         // Read the explicit allowlist again so newly approved items do not wait
         // for a server restart. Unlisted assets still never go on sale.
-        const shopItems = JSON.parse(fs.readFileSync(shopCatalogFile, 'utf8'));
+        const filename = catalogId === 'main' ? shopCatalogFile
+            : path.join(__dirname, catalogId === 'hair' ? 'hair-catalog.json' : 'color-catalog.json');
+        const price = catalogId === 'hair' ? economy.hairPrice
+            : catalogId === 'colors' ? economy.colorPrice : economy.itemPrice;
+        const shopItems = JSON.parse(fs.readFileSync(filename, 'utf8'));
         return catalog.items.filter(item => shopItems.includes(item.id))
-            .map(item => ({ id: item.id, price: economy.itemPrice }));
+            .map(item => ({ id: item.id, price: economy.itemPrices?.[item.id] ?? price }));
     }
 }
 

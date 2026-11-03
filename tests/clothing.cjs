@@ -63,7 +63,7 @@ try {
     const { ClothingLayers, loadClothing, inventoryCategories } = vm.runInNewContext(
         code + '\n({ ClothingLayers, loadClothing, inventoryCategories })', { catalog });
     assert.deepEqual(Array.from(inventoryCategories, category => category.id),
-        ['bodyColor', 'hat', 'hair', 'accessory', 'shirt', 'pants', 'shoes']);
+        ['bodyColor', 'hat', 'hair', 'accessory', 'shirt', 'pants', 'shoes', 'hands']);
     const children = [];
     const scene = { game: { renderer: { gl: true } }, add: { sprite(x, y, texture, frame) {
         return { x, y, texture: { key: texture }, frame,
@@ -153,6 +153,23 @@ try {
         assert.equal(femaleLayers.eyelashes.scaleX, 2.5);
     }
 
+    // New hand-held sheets are discovered and use an independent outfit slot.
+    fs.mkdirSync(path.join(testRoot, 'hands'));
+    fs.writeFileSync(path.join(testRoot, 'hands/flag.png'), image);
+    const handItem = buildCatalog(testRoot).items.find(item => item.id === 'hands/flag');
+    assert.equal(handItem.slot, 'hands');
+    catalog.items.push(handItem);
+    assert.equal(normalizeEquipment({ hands: handItem.id }, catalog).hands, handItem.id);
+    assert.equal(normalizeEquipment({ hat: handItem.id }, catalog).hat, null);
+    layers.setEquipment({ hands: handItem.id, hat: 'hat/cap', shirt: 'blue-shirt' });
+    layers.update(6, true, -6, 'player-walk-1');
+    assert.equal(layers.sprites.get('hands').frame, 6);
+    assert.equal(layers.sprites.get('hands').flip, true);
+    assert.equal(layers.sprites.get('hands').x, -6);
+    assert.equal(layers.sprites.get('hat').visible, true);
+    layers.setEquipment({ hat: 'hat/cap' });
+    assert.equal(layers.sprites.get('hands').visible, false);
+
     // Validate that the server relays multiple slots and rejects mismatched slot IDs.
     let connect;
     let broadcast;
@@ -165,6 +182,7 @@ try {
         : name === '../shared/collision.js' ? require('../shared/collision.js')
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
+        : name === './coffee-game.cjs' ? require('../server/coffee-game.cjs')
         : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
@@ -186,6 +204,11 @@ try {
         assert.equal(response.ok, true);
     };
     equip('hat/cap');
+    equip('hands/flag');
+    assert.equal(broadcast.equipped.hands, 'hands/flag');
+    assert.equal(broadcast.equipped.hat, 'hat/cap');
+    equip('hands/flag', false);
+    assert.equal(broadcast.equipped.hands, null);
     equip('hair/short');
     assert.equal(broadcast.equipped.hair, 'hair/short');
     assert.equal(broadcast.equipped.hat, 'hat/cap');

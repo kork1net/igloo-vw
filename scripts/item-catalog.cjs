@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // Order is also the order in which clothing is drawn over the body.
-const slots = ['bodyColor', 'shoes', 'pants', 'shirt', 'jacket', 'necklace', 'hair', 'hat', 'accessory', 'glasses'];
+const slots = ['bodyColor', 'shoes', 'pants', 'shirt', 'jacket', 'necklace', 'hair', 'hat', 'accessory', 'glasses', 'hands'];
 const itemsDirectory = path.resolve(__dirname, '../public/assets/items');
 const catalogFile = path.resolve(__dirname, '../src/game/items/catalog.generated.json');
 

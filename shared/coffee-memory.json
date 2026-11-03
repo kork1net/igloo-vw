@@ -1,0 +1,16 @@
+{
+  "maxIngredients": 5,
+  "difficultyStep": 20000,
+  "maxTickets": 4,
+  "arrivalInterval": 9000,
+  "minArrivalInterval": 3000,
+  "orderTime": 24000,
+  "minOrderTime": 10000,
+  "lives": 3,
+  "ingredients": [
+    { "id": "coffee", "name": "קפה", "color": "#382019" },
+    { "id": "milk", "name": "חלב", "color": "#fff0ba" },
+    { "id": "cocoa", "name": "קקאו", "color": "#d28732" },
+    { "id": "syrup", "name": "סירופ", "color": "#bd6de0" }
+  ]
+}

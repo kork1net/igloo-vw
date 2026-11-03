@@ -1,6 +1,22 @@
 const reducedMotion = () => typeof window !== 'undefined'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const isolatedWindows = new WeakSet();
+
+function isolateWindowEvents(overlay) {
+    if (isolatedWindows.has(overlay)) return;
+    isolatedWindows.add(overlay);
+    // Phaser also processes compatibility mouse/touch events on window. Stopping
+    // pointerdown alone still lets mousedown reach inventory items under a dialog.
+    // Bubble listeners keep native controls, text selection and scrolling working.
+    const stop = event => event.stopPropagation();
+    for (const type of ['pointerdown', 'pointerup', 'pointermove', 'pointercancel',
+        'mousedown', 'mouseup', 'mousemove', 'touchstart', 'touchend', 'touchmove',
+        'touchcancel', 'click', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress']) {
+        overlay.addEventListener(type, stop, { passive: true });
+    }
+}
+
 export function openWindow(scene, panel, overlay, animate = true) {
     panel.windowOverlay = overlay;
     panel.once('destroy', () => panel.windowTween?.stop());
@@ -35,6 +51,7 @@ export function closeWindow(scene, panel, animate = true) {
 }
 
 export function openHtmlWindow(overlay) {
+    isolateWindowEvents(overlay);
     // Scroll the contents rather than the frame, so corner buttons can protrude.
     const dialog = overlay.querySelector('[role="dialog"]');
     if (!dialog.querySelector(':scope > .window-content')) {

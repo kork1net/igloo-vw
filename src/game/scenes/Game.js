@@ -3,6 +3,7 @@ import square from '../../../shared/square.json';
 import { getSquareColliders } from '../../../shared/collision';
 import { createSnowGameEntry } from '../minigames/SnowCatch';
 import { createSnow } from '../ui/Snow';
+import { createClouds } from '../ui/Clouds';
 import { BaseRoom } from '../rooms/BaseRoom';
 import { residents } from '../residents/residents';
 import { Resident } from '../objects/Resident';
@@ -52,6 +53,7 @@ export class Game extends BaseRoom {
 
         this.add.image(width / 2, height / 2, 'igloo-square')
             .setDisplaySize(width, height).setDepth(-1);
+        this.clouds = createClouds(this);
         this.createSnow();
 
         // Buildings

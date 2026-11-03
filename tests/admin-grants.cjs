@@ -64,6 +64,38 @@ try {
     restart.grantRoom(admin, 'Game', retry, [newcomer]);
     assert.equal(restart.snapshot(firstMember, catalog).currency, initial.currency + 22);
     assert.equal(restart.snapshot(secondMember, catalog).currency, initial.currency + 22);
+    const deductedUser = { id: 'deducted', username: 'Deducted' };
+    restart.persist(deductedUser, { ...restart.load(deductedUser), currency: 100, rankingPoints: 260 });
+    const deduction = { id: 'deduct-test-001', operation: 'remove', scope: 'player', kind: 'both', amount: 30, rankingAmount: 25 };
+    assert.throws(() => restart.grant(deductedUser, recipient, deduction));
+    assert.throws(() => restart.grant(deductedUser, admin, { ...deduction, operation: 'unknown' }));
+    assert.throws(() => restart.grantRoom(admin, 'Game', { ...deduction, scope: 'room' }, [deductedUser]));
+    const receipt = restart.grant(deductedUser, admin, deduction);
+    assert.equal(receipt.acknowledged, true);
+    assert.equal(receipt.currency, -30);
+    assert.equal(receipt.rankingPoints, -25);
+    restart.grant(deductedUser, admin, deduction);
+    let deducted = restart.snapshot(deductedUser, catalog);
+    assert.equal(deducted.currency, 70);
+    assert.equal(deducted.rankingPoints, 235);
+    assert.equal(deducted.adminGifts.length, 0, 'Deductions must never queue recipient notices');
+    assert.throws(() => restart.grant(deductedUser, admin, { ...deduction, operation: 'add' }));
+    const afterRestart = new Inventories(directory);
+    afterRestart.grant(deductedUser, admin, deduction);
+    assert.equal(afterRestart.snapshot(deductedUser, catalog).currency, 70);
+    afterRestart.grant(deductedUser, admin, { ...deduction, id: 'deduct-test-002', amount: 1000, rankingAmount: 1000 });
+    deducted = afterRestart.snapshot(deductedUser, catalog);
+    assert.equal(deducted.currency, 0);
+    assert.equal(deducted.rankingPoints, 0);
+    assert.equal(deducted.level, 1);
+    assert.equal(deducted.adminGifts.length, 0);
+    const beforeDeductionFailure = afterRestart.snapshot(deductedUser, catalog);
+    try {
+        fs.renameSync = () => { throw Error('Deduction save failure'); };
+        assert.throws(() => afterRestart.grant(deductedUser, admin, { ...deduction, id: 'deduct-failure-001' }));
+    } finally { fs.renameSync = rename; }
+    assert.deepEqual(afterRestart.snapshot(deductedUser, catalog), beforeDeductionFailure);
+    console.log('PASS: silent admin deductions, authorization, zero floor, rank recalculation, durable deduplication and rollback');
     console.log('PASS: admin grants, validation, duplicate protection after acknowledgement, offline notices, progression, persistence and atomic rollback');
     console.log('PASS: combined gifts, unique room members, persisted recipient list, late joiners and partial batch retries');
 } finally {

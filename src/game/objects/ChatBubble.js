@@ -1,3 +1,5 @@
+import { adminStyle } from '../ui/AdminStyle';
+
 // The same bubble renderer is used by local and remote players.
 export function showChatMessage(owner, message) {
     if (typeof message !== 'string') return;
@@ -10,11 +12,12 @@ export function showChatMessage(owner, message) {
     }
 
     clearChatMessage(owner);
+    const isAdmin = owner.adminBadge?.visible === true;
 
     const bubbleText = owner.scene.add.text(0, 0, text, {
         fontFamily: 'Rubik, Arial, sans-serif', resolution: 2,
         fontSize: '16px',
-        color: '#17324d',
+        color: isAdmin ? adminStyle.text : '#17324d',
         align: 'center',
         wordWrap: { width: 200, useAdvancedWrap: true }
     }).setOrigin(0.5);
@@ -23,8 +26,8 @@ export function showChatMessage(owner, message) {
     const bubbleHeight = Math.ceil((bubbleText.height + 20) / 2) * 2;
 
     const bubbleBackground = owner.scene.add.graphics();
-    const fillColor = owner.chatBubbleFill ?? 0xffffff;
-    const borderColor = owner.chatBubbleBorder ?? 0x8db7d7;
+    const fillColor = isAdmin ? adminStyle.bubbleFill : owner.chatBubbleFill ?? 0xffffff;
+    const borderColor = isAdmin ? adminStyle.color : owner.chatBubbleBorder ?? 0x8db7d7;
 
     bubbleBackground.fillStyle(fillColor, 0.96);
     bubbleBackground.lineStyle(2, borderColor, 1);
@@ -37,6 +40,24 @@ export function showChatMessage(owner, message) {
         12
     );
 
+    if (isAdmin) {
+        // One-pixel gradient bands keep the same rounded silhouette in both renderers.
+        const radius = 12;
+        for (let y = 0; y < bubbleHeight; y++) {
+            const t = y / (bubbleHeight - 1);
+            const channel = shift => Math.round(
+                ((adminStyle.bubbleFill >> shift) & 255) * (1 - t)
+                + ((adminStyle.bubbleFillBottom >> shift) & 255) * t);
+            const color = (channel(16) << 16) | (channel(8) << 8) | channel(0);
+            const edge = Math.min(y + 0.5, bubbleHeight - y - 0.5);
+            const inset = edge < radius
+                ? radius - Math.sqrt(radius * radius - (radius - edge) ** 2) : 0;
+            bubbleBackground.fillStyle(color, 0.96);
+            bubbleBackground.fillRect(-bubbleWidth / 2 + inset,
+                -bubbleHeight / 2 + y, bubbleWidth - inset * 2, 1);
+        }
+    }
+
     bubbleBackground.strokeRoundedRect(
         -bubbleWidth / 2,
         -bubbleHeight / 2,
@@ -45,8 +66,8 @@ export function showChatMessage(owner, message) {
         12
     );
 
-    // Speech bubble tail
-    bubbleBackground.fillStyle(fillColor, 0.96);
+    // Speech bubble tail matches the bottom of the gradient.
+    bubbleBackground.fillStyle(isAdmin ? adminStyle.bubbleFillBottom : fillColor, 0.96);
     bubbleBackground.fillTriangle(
         -8, bubbleHeight / 2 - 1,
         8, bubbleHeight / 2 - 1,
