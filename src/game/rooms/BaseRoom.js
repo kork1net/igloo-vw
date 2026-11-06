@@ -1,5 +1,6 @@
 import rankSettings from '../../../shared/rank-settings.json';
 import { openSettings } from '../ui/Settings';
+import { openActiveQuests } from '../ui/ActiveQuests';
 import { getClothingItem, normalizeEquipment, loadClothing, ClothingLayers, getClothingTexture, applyClothingColor, inventoryCategories } from '../items/Clothing';
 import { Scene } from 'phaser';
 import { Player } from '../objects/Player';
@@ -152,15 +153,33 @@ export class BaseRoom extends Scene {
     }
 
     showClickMarker(x, y) {
-        const marker = this.add.circle(
-            x, y, 12, 0x4c9be8, 0.45
-        ).setStrokeStyle(2, 0xffffff);
-
+        const marker = this.add.graphics({ x: Math.round(x), y: Math.round(y) });
+        const animation = { progress: 0 };
+        const draw = () => {
+            const radius = 8 + Math.floor(animation.progress * 5) * 2;
+            marker.clear();
+            marker.setAlpha(1 - animation.progress);
+            // Draw on a two-pixel grid so the outline stays crisp throughout the pulse.
+            for (let dx = -radius; dx <= radius; dx += 2) {
+                const dy = radius - Math.abs(dx);
+                marker.fillStyle(0x367ca8, 0.8);
+                marker.fillRect(dx - 1, dy, 2, 3);
+                marker.fillRect(dx - 1, -dy, 2, 3);
+                marker.fillStyle(0xdaf5ff, 1);
+                marker.fillRect(dx - 1, dy - 1, 2, 2);
+                marker.fillRect(dx - 1, -dy - 1, 2, 2);
+            }
+            marker.fillStyle(0x83cce9, 1);
+            marker.fillRect(-3, -1, 6, 2);
+            marker.fillRect(-1, -3, 2, 6);
+        };
+        draw();
         this.tweens.add({
-            targets: marker,
-            scale: 1.8,
-            alpha: 0,
-            duration: 400,
+            targets: animation,
+            progress: 1,
+            duration: 420,
+            ease: 'Sine.easeOut',
+            onUpdate: draw,
             onComplete: () => marker.destroy()
         });
     }
@@ -221,6 +240,7 @@ export class BaseRoom extends Scene {
         this.load.image('x-button', 'assets/ui/x-button.png');
         this.load.image('page-arrow-left', 'assets/ui/arrowLeft-button.png');
         this.load.image('settings-button', 'assets/ui/settings-button.png');
+        this.load.image('quest-button', 'assets/ui/quest-button.png');
         this.load.image('catching-snow-background', 'assets/ui/catching-snow-background.png');
         this.load.image('catching-snow-basket', 'assets/ui/catching-snow-basket.png');
         this.load.image('coin-symbol', 'assets/ui/coin-symbol.png');
@@ -268,7 +288,7 @@ export class BaseRoom extends Scene {
         const barY = height - 47;
         const barWidth = Math.min(width - 80, 650);
         const barRight = width / 2 + barWidth / 2;
-        const inputWidth = barWidth - 246;
+        const inputWidth = barWidth - 294;
         const inputHeight = 38;
         const buttonWidth = 42;
         const buttonHeight = buttonWidth * 41 / 38;
@@ -302,7 +322,7 @@ export class BaseRoom extends Scene {
 
         // HTML input
         this.chatInput = this.add.dom(
-            width / 2 - 55,
+            width / 2 - 79,
             barY - 3,
             input
         ).setOrigin(0.5)
@@ -322,7 +342,7 @@ export class BaseRoom extends Scene {
         // Inventory button
 
         const inventoryButton = this.add.image(
-            barRight - 141,
+            barRight - 189,
             barY,
             'inv-button'
         )
@@ -338,6 +358,16 @@ export class BaseRoom extends Scene {
 
         this.addButtonHover(sendButton);
         this.addButtonHover(inventoryButton);
+        const questButton = this.add.image(barRight - 93, barY, 'quest-button')
+            .setScale(buttonHeight / this.textures.get('quest-button').getSourceImage().height)
+            .setInteractive({ useHandCursor: true }).setDepth(101).setScrollFactor(0);
+        this.addButtonHover(questButton);
+        questButton.on('pointerdown', (pointer, localX, localY, event) => {
+            event.stopPropagation();
+            this.emojiMenu?.setVisible(false);
+            this.sound.play('wood-tap-ui');
+            openActiveQuests(this);
+        });
         const settingsButton = this.add.image(barRight - 45, barY, 'settings-button')
             .setDisplaySize(buttonWidth, buttonHeight).setInteractive({ useHandCursor: true })
             .setDepth(101).setScrollFactor(0);
@@ -348,11 +378,11 @@ export class BaseRoom extends Scene {
             this.sound.play('wood-tap-ui');
             openSettings(this);
         });
-        this.emojiButton = this.add.image(barRight - 93, barY, 'emoji-button')
+        this.emojiButton = this.add.image(barRight - 141, barY, 'emoji-button')
             .setDisplaySize(buttonWidth, buttonHeight).setInteractive({ useHandCursor: true })
             .setDepth(101).setScrollFactor(0);
         this.addButtonHover(this.emojiButton);
-        this.emojiMenu = createEmojiMenu(this, this.emojiButton, barRight - 117, barY - 124);
+        this.emojiMenu = createEmojiMenu(this, this.emojiButton, barRight - 165, barY - 124);
 
         const sendMessage = () => {
             const message = input.value.trim();

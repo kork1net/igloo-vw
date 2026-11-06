@@ -385,6 +385,11 @@ html, body {
 .resident-quest-list::-webkit-scrollbar,
 .resident-dialogue > .window-content::-webkit-scrollbar { display: none; }
 .resident-quest-list > li + li { margin-top: 10px; }
+.active-quests-dialogue { width: 600px; }
+.active-quests-dialogue h2 { margin: 0 0 18px; }
+.active-quests-dialogue .quest-entry { cursor: default; }
+.active-quests-dialogue .quest-entry:hover { background: #f3faff; }
+.active-quests-dialogue .active-quest-contact { color: #456c8b; font-size: 13px; }
 .resident-dialogue > .window-content { scrollbar-width: none; }
 .resident-quests [hidden] { display: none; }
 .quest-chain-header h4 { margin: 8px 0 12px; font-size: 18px; }
