@@ -1,0 +1,33 @@
+{
+  "lost-delivery": [
+    "parcels",
+    "rani-delivery",
+    "rani-opening"
+  ],
+  "mia-first-shift": [
+    "first-cups",
+    "napkins",
+    "busy-cups"
+  ],
+  "square-winter": [
+    "winter-snow",
+    "winter-parcels",
+    "warm-drinks"
+  ],
+  "rani-display": [
+    "display-ribbons",
+    "display-buy",
+    "display-mia"
+  ],
+  "mia-big-evening": [
+    "evening-orders",
+    "evening-cleanup",
+    "evening-leo"
+  ],
+  "town-reliable-hands": [
+    "reliable-snow",
+    "reliable-rani",
+    "reliable-mia",
+    "reliable-return"
+  ]
+}

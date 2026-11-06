@@ -2,12 +2,22 @@ import { BaseRoom } from '../rooms/BaseRoom';
 import { residents } from '../residents/residents';
 import { Resident } from '../objects/Resident';
 import { createCoffeeGameEntry } from '../minigames/CoffeeMemory';
+import { createCafeDecor } from '../objects/CafeDecor';
+import { getShopInteriorColliders } from '../../../shared/collision';
+import { addHoverOutline } from '../ui/HoverOutline';
 
 export class Cafe extends BaseRoom {
     constructor() { super('Cafe'); }
 
     preload() {
         super.preload();
+        this.load.image('cafe-shop-background', 'assets/enviroment/shop-interior-background-simple.png');
+        this.load.image('cafe-table', 'assets/enviroment/cafe-table.png');
+        this.load.image('cafe-cashbox', 'assets/enviroment/cashbox.png');
+        this.load.image('cafe-minigame-cup', 'assets/enviroment/minigame-cup.png');
+        this.load.image('cafe-menu', 'assets/enviroment/menu.png');
+        this.load.image('cafe-light', 'assets/enviroment/cafe-light.png');
+        this.load.image('shop-leave-arrow', 'assets/ui/leave-arrow.png');
         for (const resident of residents.filter(resident => resident.room === 'Cafe')) {
             if (!this.textures.exists(resident.texture)) this.load.image(resident.texture, resident.image);
         }
@@ -30,40 +40,18 @@ export class Cafe extends BaseRoom {
         this.cameras.main.setBackgroundColor(0x5c4840);
         document.body.style.backgroundColor = '#5c4840';
         document.getElementById('game-container').style.backgroundColor = '#5c4840';
-        this.add.rectangle(width / 2, height / 2, width - 80, height - 80, 0xc59f7b);
-        this.add.rectangle(width / 2, 130, width - 80, 180, 0xf0debd);
-        for (let y = 250; y < height - 50; y += 64) {
-            this.add.rectangle(width / 2, y, width - 80, 2, 0x9b785d, 0.4);
-        }
-        this.add.rectangle(width / 2, height / 2, width - 80, height - 80)
-            .setFillStyle().setStrokeStyle(4, 0x9bc5df).setDepth(10);
-        this.add.text(width / 2, 80, 'בית הקפה של איגלו', {
-            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '34px',
-            fontStyle: 'bold', color: '#5b4033'
-        }).setOrigin(0.5);
-        this.add.rectangle(width / 2, 200, 420, 70, 0x76513b).setStrokeStyle(4, 0xae8057);
-        for (const x of [width / 2 - 120, width / 2, width / 2 + 120]) {
-            this.add.rectangle(x, 169, 24, 20, 0xe5f4ff).setStrokeStyle(2, 0x7199bd);
-        }
-        for (const x of [260, width - 260]) {
-            for (const y of [355, 490]) {
-                this.add.ellipse(x, y + 12, 140, 30, 0x5c4840, 0.15);
-                this.add.rectangle(x - 70, y + 25, 34, 34, 0x8e5d45);
-                this.add.rectangle(x + 70, y + 25, 34, 34, 0x8e5d45);
-                this.add.ellipse(x, y, 120, 65, 0xead0a4).setStrokeStyle(3, 0x76513b);
-            }
-        }
+        this.cafeDecor = createCafeDecor(this);
+        this.colliders = getShopInteriorColliders(width, height);
         this.createPlayer(width / 2, height - 190, 'Player1');
-        this.coffeeGameEntry = createCoffeeGameEntry(this);
+        this.coffeeGameEntry = createCoffeeGameEntry(this, this.cafeDecor.gamePosition);
         this.residents = new Map(residents.filter(resident => resident.room === 'Cafe')
             .map(definition => [definition.id, new Resident(this, definition)]));
-        this.exit = this.add.rectangle(width / 2, height - 100, 110, 55, 0x76513b)
-            .setStrokeStyle(3, 0xe5f4ff).setInteractive({ useHandCursor: true });
-        const label = this.add.text(width / 2, height - 100, 'לכיכר', {
-            fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '20px', color: '#ffffff'
-        }).setOrigin(0.5);
-        this.addButtonHover(this.exit, [this.exit, label]);
-        this.exitPoint = { x: width / 2, y: height - 130 };
+        this.exit = this.add.image(18, height - 18, 'shop-leave-arrow')
+            .setOrigin(0, 1).setScale(2).setFlipX(true).setDepth(90).setScrollFactor(0)
+            .setInteractive({ pixelPerfect: true, alphaTolerance: 128, useHandCursor: true });
+        this.exitOutline = addHoverOutline(this, this.exit);
+        this.addButtonHover(this.exit, [this.exit, this.exitOutline]);
+        this.exitPoint = { x: 90, y: height - 75 };
         this.lastExitClickTime = -Infinity;
         this.exit.on('pointerdown', () => {
             const now = this.time.now;

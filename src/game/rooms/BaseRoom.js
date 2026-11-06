@@ -3,6 +3,7 @@ import { openSettings } from '../ui/Settings';
 import { getClothingItem, normalizeEquipment, loadClothing, ClothingLayers, getClothingTexture, applyClothingColor, inventoryCategories } from '../items/Clothing';
 import { Scene } from 'phaser';
 import { Player } from '../objects/Player';
+import { createAdminBadge } from '../objects/AdminBadge';
 import Multiplayer from '../network/Multiplayer';
 import { showLoadingScreen } from '../ui/LoadingScreen';
 import { addButtonHover } from '../ui/ButtonHover';
@@ -17,6 +18,7 @@ import { openAdminGrants } from '../ui/AdminGrants';
 import { openAdminReset } from '../ui/AdminReset';
 import { createEmojiMenu } from '../ui/EmojiMenu';
 import { openPurchaseConfirmation } from '../ui/PurchaseConfirmation';
+import { createQuestGround } from '../objects/QuestGround';
 
 export class BaseRoom extends Scene {
     constructor(key) {
@@ -49,6 +51,7 @@ export class BaseRoom extends Scene {
         this.player = new Player(this, x, y, username);
         this.multiplayer = new Multiplayer(this);
         this.multiplayer.connect();
+        createQuestGround(this);
 
         this.player.setEquipment(inventory.equipped);
         this.pendingTransition = null;
@@ -444,9 +447,12 @@ export class BaseRoom extends Scene {
             .setOrigin(0.5, 1).setScale(2.5));
         const clothing = new ClothingLayers(this, panel, centerX, centerY + 115, 2.5, previewBody, remotePlayer.gender);
         clothing.setEquipment(remotePlayer.equipped);
+        const adminBadgeHolder = add(this.add.container(centerX - 92, centerY + 108 - 61 * 1.6).setScale(1.6));
+        const adminBadge = createAdminBadge(this, adminBadgeHolder, remotePlayer.adminBadge?.visible);
 
         const close = add(this.add.image(centerX + 188, centerY - 228, 'x-button')
-            .setDisplaySize(48, 48 * 47 / 51).setInteractive({ useHandCursor: true }));
+            .setInteractive({ useHandCursor: true }));
+        close.setScale(48 / close.width);
         close.on('pointerdown', (pointer, localX, localY, event) => {
             event.stopPropagation();
             this.sound.play('ui-close');
@@ -457,10 +463,28 @@ export class BaseRoom extends Scene {
         const levelBadge = add(this.add.image(centerX, centerY + 184, 'levels-symbols', 0)
             .setDisplaySize(80, 80));
         addLevelBadgePulse(this, levelBadge);
-        const trade = add(this.add.text(centerX + 120, centerY + 185, '⇄ החלפה', {
+        const trade = add(this.add.container(centerX + 120, centerY + 185)
+            .setSize(112, 62).setInteractive({ useHandCursor: true }));
+        const tradeFrame = this.add.nineslice(0, 0, 'quest-entry-frame', undefined, 112, 62, 4, 4, 4, 4)
+            .setTint(0xa9dcff);
+        const tradeIcon = this.add.graphics();
+        tradeIcon.fillStyle(0x337ca6);
+        tradeIcon.fillRect(-17, -17, 30, 3);
+        tradeIcon.fillRect(10, -21, 3, 11);
+        tradeIcon.fillRect(13, -19, 3, 7);
+        tradeIcon.fillRect(16, -17, 3, 3);
+        tradeIcon.fillStyle(0x6eacd0);
+        tradeIcon.fillRect(-13, -7, 30, 3);
+        tradeIcon.fillRect(-13, -11, 3, 11);
+        tradeIcon.fillRect(-16, -9, 3, 7);
+        tradeIcon.fillRect(-19, -7, 3, 3);
+        const tradeLabel = this.add.text(0, 15, 'החלפה', {
             fontFamily: 'Rubik, Arial, sans-serif', resolution: 2, fontSize: '17px',
-            fontStyle: 'bold', color: '#ffffff', backgroundColor: '#3779a8', padding: { x: 10, y: 8 }
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true }));
+            fontStyle: 'bold', color: '#244d70'
+        }).setOrigin(0.5);
+        trade.add([tradeFrame, tradeIcon, tradeLabel]);
+        trade.on('pointerover', () => tradeFrame.setTint(0xffffff));
+        trade.on('pointerout', () => tradeFrame.setTint(0xa9dcff));
         trade.setData('tradeRequest', true);
         this.addButtonHover(trade);
         trade.on('pointerdown', (pointer, localX, localY, event) => {
@@ -471,7 +495,7 @@ export class BaseRoom extends Scene {
                 if (this.sys.isActive()) this.showItemNotice(error.message);
             });
         });
-        this.playerCard = { panel, remotePlayer, name, clothing, levelBadge };
+        this.playerCard = { panel, remotePlayer, name, clothing, levelBadge, adminBadge };
         // Phaser DOM inputs otherwise stay above the canvas modal.
         this.chatInput?.setVisible(false);
         this.refreshPlayerCard();
@@ -480,12 +504,13 @@ export class BaseRoom extends Scene {
 
     refreshPlayerCard() {
         if (!this.playerCard) return;
-        const { remotePlayer, name, clothing, levelBadge } = this.playerCard;
+        const { remotePlayer, name, clothing, levelBadge, adminBadge } = this.playerCard;
         if (![...this.multiplayer.remotePlayers.values()].includes(remotePlayer)) {
             this.closePlayerCard();
             return;
         }
         name.setText(remotePlayer.username);
+        adminBadge.setVisible(remotePlayer.adminBadge?.visible === true);
         const level = Math.max(1, Math.min(rankSettings.maxLevel, remotePlayer.level || 1));
         levelBadge.setFrame(level - 1);
         clothing.setEquipment(remotePlayer.equipped);
@@ -606,6 +631,8 @@ export class BaseRoom extends Scene {
             .setOrigin(0.5, 1).setScale(2.5));
         const clothing = new ClothingLayers(this, panel, previewX, centerY + 115, 2.5, previewBody, this.player.gender);
         clothing.setEquipment(this.catalogOpen ? (this.catalogPreviewEquipment || inventory.equipped) : inventory.equipped);
+        const previewAdminBadge = add(this.add.container(previewX - 80, centerY + 140 - 61 * 1.6).setScale(1.6));
+        createAdminBadge(this, previewAdminBadge, this.registry.get('auth')?.user?.isAdmin);
         if (!this.catalogOpen) {
             for (const [slot, sprite] of clothing.sprites) {
                 sprite.setInteractive({ pixelPerfect: true, alphaTolerance: 1, useHandCursor: true });

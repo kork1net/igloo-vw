@@ -1,15 +1,13 @@
 import { openQuestConversation } from './QuestConversation';
-const TEXT = { completed: 'המשימה הושלמה. משקפי השמש נוספו לתיק שלכם!',
-    available: 'לליאו יש משהו לספר לכם. לחצו כדי לדבר איתו.',
-    finished: 'הושלם', speak: 'שיחה עם ליאו', ready: 'השלמתם את הבקשה — חזרו לדבר עם ליאו!' };
+const TEXT = { finished: '\u05d4\u05d5\u05e9\u05dc\u05dd' };
 
 export function renderResidentQuests(resident) {
     const overlay = resident.dialogue;
     if (!overlay || overlay.windowClosing) return;
     const list = overlay.querySelector('.resident-quest-list');
     const empty = overlay.querySelector('.resident-quests-empty');
-    const ids = resident.definition.questChainIds || [];
     const quests = resident.scene.registry.get('inventory')?.quests || {};
+    const ids = Object.values(quests).filter(chain => chain.residentId === resident.id).map(chain => chain.id);
     list.replaceChildren();
     list.hidden = ids.length === 0;
     empty.hidden = ids.length > 0;
@@ -24,11 +22,11 @@ export function renderResidentQuests(resident) {
         entry.type = 'button'; entry.className = 'quest-entry'; entry.dataset.questId = id;
         const title = document.createElement('strong'); title.textContent = chain.title;
         const detail = document.createElement('p');
-        detail.textContent = chain.completed ? TEXT.completed : !chain.started ? TEXT.available : step.description;
+        detail.textContent = chain.completed ? TEXT.finished : !chain.started ? '\u05de\u05e9\u05d9\u05de\u05d4 \u05d7\u05d3\u05e9\u05d4 - \u05dc\u05d7\u05e6\u05d5 \u05dc\u05e9\u05d9\u05d7\u05d4.' : step.description;
         if (chain.completed) detail.className = 'quest-complete';
         const status = document.createElement('span'); status.className = 'quest-progress';
-        status.textContent = chain.completed ? TEXT.finished : !chain.started ? TEXT.speak
-            : step.ready ? TEXT.ready : step.progressText;
+        status.textContent = chain.completed ? TEXT.finished : !chain.started ? resident.definition.name
+            : step.ready ? '\u05d4\u05d1\u05e7\u05e9\u05d4 \u05d4\u05d5\u05e9\u05dc\u05de\u05d4 - \u05dc\u05d7\u05e6\u05d5 \u05db\u05d3\u05d9 \u05dc\u05d4\u05de\u05e9\u05d9\u05da' : step.progressText;
         if (step) row.dataset.stepId = step.id;
         entry.append(title, detail, status);
         entry.addEventListener('click', () => {

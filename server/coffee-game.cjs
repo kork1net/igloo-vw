@@ -2,7 +2,7 @@ const { randomUUID } = require('node:crypto');
 const config = require('../shared/coffee-memory.json');
 
 function coffeeRewards(score, orders) {
-    return orders > 0 ? { coins: 1 + Math.floor(score / 100), rankingPoints: 2 + Math.floor(score / 60) }
+    return orders > 0 ? { coins: 2 + 2 * Math.floor(score / 100), rankingPoints: 4 + 2 * Math.floor(score / 60) }
         : { coins: 0, rankingPoints: 0 };
 }
 

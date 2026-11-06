@@ -9,6 +9,10 @@ const square = require('../shared/square.json');
 const emojiConfig = require('../shared/emojis.json');
 const squareColliders = getSquareColliders(square);
 const shopInteriorColliders = getShopInteriorColliders();
+const residentQuests = require('./resident-quests.cjs');
+const { QuestGround } = require('./quest-ground.cjs');
+const { QuestEditor } = require('./quest-editor.cjs');
+const questEditor = new QuestEditor(process.env.VW_QUESTS_DIR);
 const { SnowGames } = require('./snow-game.cjs');
 const snowGames = new SnowGames();
 const { CoffeeGames } = require('./coffee-game.cjs');
@@ -96,7 +100,7 @@ io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
 
     const room = ['Shop', 'Cafe'].includes(socket.handshake.auth?.room) ? socket.handshake.auth.room : 'Game';
-    const roomColliders = room === 'Game' ? squareColliders : room === 'Shop' ? shopInteriorColliders : [];
+    const roomColliders = room === 'Game' ? squareColliders : shopInteriorColliders;
     socket.join(room);
     socket.join(`user:${user.id}`);
     const initial = socket.handshake.auth?.player || {};
@@ -195,6 +199,7 @@ io.on('connection', (socket) => {
                 if (action === 'snow:start') {
                     const round = snowGames.start(user.id, socket.id);
                     if (round.questStepId === undefined) round.questStepId = inventories.currentQuestStep(user);
+                    if (round.questStages === undefined) round.questStages = inventories.questStages(user);
                     setMinigame('snow-catch');
                     stopSnowTimer();
                     snowTimer = setInterval(() => {
@@ -225,6 +230,7 @@ io.on('connection', (socket) => {
                 }
                 const round = action === 'coffee:start' ? coffeeGames.start(user.id, socket.id)
                     : coffeeGames.get(user.id, socket.id);
+                if (round.questStages === undefined) round.questStages = inventories.questStages(user);
                 if (action !== 'coffee:start' && request?.id !== round.id) throw new Error('המשחק אינו פעיל.');
                 if (action === 'coffee:choose') round.choose(request.ingredient);
                 if (action === 'coffee:clear') round.clear();
@@ -240,6 +246,32 @@ io.on('connection', (socket) => {
         });
     }
     socket.on('disconnect', () => coffeeGames.cancel(user.id, socket.id));
+    for (const action of ['admin:quests', 'admin:saveQuest']) {
+        socket.on(action, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            if (!accounts.authenticate(token)?.isAdmin) {
+                reply({ ok: false, error: 'הפעולה זמינה למנהלים בלבד.' }); return;
+            }
+            try {
+                if (residentQuests.residentRooms[request?.residentId] !== room) throw Error('פתחו את חלון התושב בחדר שלו.');
+                const quests = action === 'admin:saveQuest' ? questEditor.save(request.residentId, request)
+                    : questEditor.list(request.residentId);
+                reply({ ok: true, quests });
+                if (action === 'admin:saveQuest') {
+                    const updated = new Set();
+                    for (const player of players.values()) {
+                        if (updated.has(player.userId)) continue;
+                        updated.add(player.userId);
+                        const recipient = accounts.findUser(player.username);
+                        if (recipient) {
+                            try { pushInventory(recipient); }
+                            catch (error) { console.error('Cannot refresh quests for player:', error.code || error.name); }
+                        }
+                    }
+                }
+            } catch (error) { reply({ ok: false, error: error.code ? 'לא ניתן לשמור את המשימות. נסו שוב.' : error.message }); }
+        });
+    }
     for (const action of ['admin:items', 'admin:setItemRarity']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
@@ -338,19 +370,48 @@ io.on('connection', (socket) => {
                 ? error.message : 'לא ניתן לשמור את השינוי. נסו שוב.' });
         }
     };
+    socket.on('cafe:secretCup', (request, reply) => {
+        if (typeof reply !== 'function') return;
+        let secretReward;
+        inventoryAction(() => {
+            if (room !== 'Cafe') throw new InventoryError('הספל נמצא בבית הקפה.');
+            secretReward = inventories.claimCafeSecret(user, getCatalog());
+        }, result => reply({ ...result, ...(result.ok ? { secretReward } : {}) }));
+    });
     socket.on('admin:ackGift', (request, reply) => inventoryAction(
         () => inventories.acknowledgeGift(user, request?.id, request?.senderId), reply));
 
-    for (const action of ['quest:accept', 'quest:claim']) {
+    const questGround = new QuestGround(roomColliders, resolveMovement);
+    for (const action of ['quest:ground', 'quest:collect']) {
+        socket.on(action, (request, reply) => {
+            if (typeof reply !== 'function') return;
+            try {
+                const quests = inventories.snapshot(user, getCatalog()).quests;
+                if (action === 'quest:collect') {
+                    questGround.collect(request?.id, players.get(socket.id), quests, item =>
+                        inventories.collectQuestItem(user, item.chainId, item.stepId, getCatalog()));
+                    pushInventory(user);
+                }
+                reply({ ok: true, ground: questGround.list(inventories.snapshot(user, getCatalog()).quests) });
+            } catch (error) { reply({ ok: false, error: error.message }); }
+        });
+    }
+
+    for (const action of ['quest:accept', 'quest:claim', 'quest:adminComplete']) {
         socket.on(action, (request, reply) => {
             if (typeof reply !== 'function') return;
             let questReward;
             inventoryAction(() => {
-                if (room !== 'Game') throw new InventoryError('חזרו לשוטר ליאו בכיכר כדי לקבל את הפרס.');
+                if (action === 'quest:adminComplete' && !accounts.authenticate(token)?.isAdmin) {
+                    throw new InventoryError('האפשרות זמינה למנהלים בלבד.');
+                }
+                const quest = inventories.snapshot(user, getCatalog()).quests?.[request?.chainId];
+                try { residentQuests.assertResident(quest, room); }
+                catch (error) { throw new InventoryError(error.message); }
                 if (action === 'quest:accept') inventories.acceptQuest(user, request?.chainId, getCatalog());
                 else {
                     const step = inventories.snapshot(user, getCatalog()).quests?.[request?.chainId]?.steps?.find(entry => entry.id === request?.stepId);
-                    inventories.claimQuest(user, request?.chainId, request?.stepId, getCatalog());
+                    inventories.claimQuest(user, request?.chainId, request?.stepId, getCatalog(), action === 'quest:adminComplete');
                     questReward = { coins: step.coins, rankingPoints: step.rankingPoints, itemId: step.itemReward || null };
                 }
             }, result => reply({ ...result, ...(result.ok && questReward ? { questReward } : {}) }));

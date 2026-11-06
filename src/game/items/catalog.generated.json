@@ -51,6 +51,61 @@
       }
     },
     {
+      "id": "accessory/gray-glasses",
+      "slot": "glasses",
+      "name": "משקפיים אפורים",
+      "texture": "clothing:accessory/gray-glasses",
+      "path": "assets/items/accessory/gray-glasses.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "accessory/gray-glasses--black",
+      "slot": "glasses",
+      "name": "משקפיים שחורים",
+      "texture": "clothing:accessory/gray-glasses",
+      "path": "assets/items/accessory/gray-glasses.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "accessory/gray-glasses",
+      "hue": 0,
+      "palette": {
+        "#707070": "#20242a"
+      }
+    },
+    {
+      "id": "accessory/gray-glasses--gold",
+      "slot": "glasses",
+      "name": "משקפיים מוזהבים",
+      "texture": "clothing:accessory/gray-glasses",
+      "path": "assets/items/accessory/gray-glasses.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "accessory/gray-glasses",
+      "hue": 0,
+      "palette": {
+        "#707070": "#e8b644"
+      }
+    },
+    {
+      "id": "accessory/gray-glasses--white",
+      "slot": "glasses",
+      "name": "משקפיים לבנים",
+      "texture": "clothing:accessory/gray-glasses",
+      "path": "assets/items/accessory/gray-glasses.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {},
+      "sourceItem": "accessory/gray-glasses",
+      "hue": 0,
+      "palette": {
+        "#707070": "#e0e5eb"
+      }
+    },
+    {
       "id": "body-color/blue",
       "name": "תכלת",
       "slot": "bodyColor",
@@ -105,6 +160,30 @@
       "texture": "player",
       "tint": 15844773,
       "order": 8
+    },
+    {
+      "id": "body-color/skin-dark",
+      "name": "צבע גוף כהה",
+      "slot": "bodyColor",
+      "texture": "player",
+      "tint": 8869951,
+      "order": 10
+    },
+    {
+      "id": "body-color/skin-light",
+      "name": "צבע גוף בהיר",
+      "slot": "bodyColor",
+      "texture": "player",
+      "tint": 16768967,
+      "order": 11
+    },
+    {
+      "id": "body-color/skin-tan",
+      "name": "צבע גוף שזוף",
+      "slot": "bodyColor",
+      "texture": "player",
+      "tint": 13605488,
+      "order": 9
     },
     {
       "id": "body-color/white",
@@ -255,6 +334,26 @@
       }
     },
     {
+      "id": "hands/box-hold",
+      "slot": "hands",
+      "name": "box-hold",
+      "texture": "clothing:hands/box-hold",
+      "path": "assets/items/hands/box-hold.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hands/coffee-cup",
+      "slot": "hands",
+      "name": "coffee-cup",
+      "texture": "clothing:hands/coffee-cup",
+      "path": "assets/items/hands/coffee-cup.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
       "id": "hands/sofgania-choco",
       "slot": "hands",
       "name": "sofgania-choco",
@@ -270,6 +369,16 @@
       "name": "sofgania-riba",
       "texture": "clothing:hands/sofgania-riba",
       "path": "assets/items/hands/sofgania-riba.png",
+      "frameWidth": 64,
+      "frameHeight": 78,
+      "walkTextures": {}
+    },
+    {
+      "id": "hat/coffee-hat",
+      "slot": "hat",
+      "name": "coffee-hat",
+      "texture": "clothing:hat/coffee-hat",
+      "path": "assets/items/hat/coffee-hat.png",
       "frameWidth": 64,
       "frameHeight": 78,
       "walkTextures": {}

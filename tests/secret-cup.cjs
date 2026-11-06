@@ -1,0 +1,48 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { Inventories } = require('../server/inventory.cjs');
+const { buildCatalog } = require('../scripts/item-catalog.cjs');
+const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vw-secret-cup-'));
+try {
+    const store = new Inventories(directory), catalog = buildCatalog();
+    const itemId = 'hands/coffee-cup';
+    const user = { id: 'secret-player', username: 'SecretPlayer' };
+    const before = store.snapshot(user, catalog);
+    assert.deepEqual(store.claimCafeSecret(user, catalog), { claimed: true, itemId });
+    const after = store.snapshot(user, catalog);
+    assert.equal(after.quantities[itemId], 1);
+    assert.equal(after.secrets.cafePictureCup, true);
+    assert.equal(after.currency, before.currency);
+    assert.equal(after.rankingPoints, before.rankingPoints);
+    assert.equal(store.claimCafeSecret(user, catalog).claimed, false);
+    assert.deepEqual(store.snapshot(user, catalog), after);
+    const reopened = new Inventories(directory);
+    assert.equal(reopened.snapshot(user, catalog).secrets.cafePictureCup, true);
+    assert.equal(reopened.claimCafeSecret(user, catalog).claimed, false);
+    const profile = reopened.load(user);
+    const quantities = { ...profile.quantities }; delete quantities[itemId];
+    reopened.persist(user, { ...profile, items: profile.items.filter(id => id !== itemId), quantities });
+    assert.equal(reopened.claimCafeSecret(user, catalog).claimed, false, 'Trading away the reward cannot claim it again');
+    const admin = { id: 'secret-admin', username: 'Admin', isAdmin: true };
+    assert.equal(store.claimCafeSecret(admin, catalog).claimed, true);
+    assert.equal(store.claimCafeSecret(admin, catalog).claimed, false);
+    assert.equal(store.load(admin).quantities[itemId], undefined);
+    const failure = { id: 'secret-failure', username: 'Failure' };
+    const initial = store.snapshot(failure, catalog), persist = store.persist;
+    store.persist = () => { throw Error('disk failure'); };
+    assert.throws(() => store.claimCafeSecret(failure, catalog), /disk failure/);
+    assert.deepEqual(store.snapshot(failure, catalog), initial);
+    store.persist = persist;
+    assert.equal(store.claimCafeSecret(failure, catalog).claimed, true);
+    const full = { id: 'secret-full', username: 'Full' };
+    const fullProfile = store.load(full);
+    store.persist(full, { ...fullProfile, items: [...fullProfile.items, itemId], quantities: { ...fullProfile.quantities, [itemId]: 20 } });
+    assert.throws(() => store.claimCafeSecret(full, catalog));
+    assert.equal(store.load(full).secrets, undefined);
+    console.log('PASS secret cup: one-time reward, persistence, traded-away reward, admin, quantity cap and save rollback');
+} finally {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true });
+}

@@ -33,10 +33,29 @@ export function receiveTradeState(scene, state) {
     </section>`;
     const content = overlay.querySelector('.trade-content'), message = overlay.querySelector('.trade-message');
     let busy = false, category = 'all';
+    const inventoryScroll = new Map();
+    let cleanupChat = () => {};
+    const bubbles = new Map(), bubbleTimers = new Map();
+    const refreshBubbles = () => {
+        for (const avatar of overlay.querySelectorAll('[data-trade-speaker]')) {
+            const bubble = avatar.querySelector('.trade-speech');
+            const text = bubbles.get(avatar.dataset.tradeSpeaker);
+            bubble.textContent = text || ''; bubble.hidden = !text;
+        }
+    };
+    const showBubble = (name, text) => {
+        if (!window.state.players.some(player => player.username === name)) return;
+        bubbleTimers.get(name)?.remove(); bubbles.set(name, text);
+        bubbleTimers.set(name, scene.time.delayedCall(5500, () => {
+            bubbles.delete(name); bubbleTimers.delete(name); refreshBubbles();
+        }));
+        refreshBubbles();
+    };
     const window = { state, render, close: animate => {
         if (scene.tradeWindow !== window) return;
         scene.tradeWindow = null;
         scene.events.off('shutdown', shutdown);
+        cleanupChat();
         closeModal(animate);
     } };
     scene.tradeWindow = window;
@@ -48,6 +67,32 @@ export function receiveTradeState(scene, state) {
         finally { busy = false; if (scene.tradeWindow === window) render(); }
     };
     const cancel = () => send('cancel');
+    if (state.phase !== 'pending') {
+        const chat = document.createElement('section'); chat.className = 'trade-chat';
+        chat.innerHTML = `<form class="trade-chat-form"><input type="text" maxlength="100" placeholder="כתבו הודעה..." aria-label="הודעה בצ׳אט" autocomplete="off" />
+            <button type="submit">שליחה</button></form>`;
+        overlay.querySelector('.trade-dialogue').append(chat);
+        const input = chat.querySelector('input');
+        const receive = data => {
+            if (typeof data?.message !== 'string') return;
+            const player = scene.multiplayer.remotePlayers.get(data.id);
+            if (player) showBubble(player.username, data.message);
+        };
+        scene.multiplayer.socket.on('chatMessage', receive);
+        cleanupChat = () => {
+            scene.multiplayer.socket.off('chatMessage', receive);
+            for (const timer of bubbleTimers.values()) timer.remove();
+            bubbleTimers.clear(); bubbles.clear();
+        };
+        chat.querySelector('form').addEventListener('submit', event => {
+            event.preventDefault();
+            const text = input.value.trim().slice(0, 100);
+            if (!text || !scene.multiplayer.socket.connected) return;
+            scene.player.showMessage(text);
+            scene.multiplayer.sendChatMessage(text);
+            showBubble(scene.player.username, text); input.value = ''; input.focus();
+        });
+    }
     const closeModal = state.phase === 'pending' ? mountRequest(overlay, cancel)
         : mountModal(scene, overlay, cancel, 'tradeModal');
     const shutdown = () => { if (scene.tradeWindow === window) window.close(false); };
@@ -75,6 +120,8 @@ export function receiveTradeState(scene, state) {
 
     function render() {
         const state = window.state;
+        const previousInventory = content.querySelector('.trade-inventory');
+        if (previousInventory) inventoryScroll.set(previousInventory.dataset.category, previousInventory.scrollTop);
         content.replaceChildren();
         overlay.querySelector('.trade-dialogue').classList.toggle('trade-request-dialogue', state.phase === 'pending');
         overlay.querySelector('h2').textContent = state.phase === 'pending' ? 'בקשת החלפה' : 'החלפת פריטים';
@@ -120,6 +167,7 @@ export function receiveTradeState(scene, state) {
         for (const index of [state.me, 1 - state.me]) {
             const player = state.players[index], mine = index === state.me;
             const side = document.createElement('section'); side.className = 'trade-side';
+            side.dataset.side = mine ? 'own' : 'other';
             const name = document.createElement('h3'); name.textContent = `${player.username}${mine ? ' (אתם)' : ''}`;
             const body = document.createElement('div'); body.className = 'trade-side-body';
             const slots = document.createElement('div'); slots.className = 'trade-offer'; slots.dataset.side = mine ? 'own' : 'other';
@@ -127,13 +175,19 @@ export function receiveTradeState(scene, state) {
                 const id = player.offer[i];
                 slots.append(itemButton(id, !mine || !id, mine && id ? () => send('offer', { items: own.offer.filter((item, position) => position !== i) }) : null));
             }
-            body.append(createTradeAvatar(scene, player), slots);
+            const avatar = document.createElement('div'); avatar.className = 'trade-avatar-wrap';
+            avatar.dataset.tradeSpeaker = player.username;
+            const bubble = document.createElement('div'); bubble.className = 'trade-speech';
+            bubble.setAttribute('role', 'status'); bubble.setAttribute('aria-live', 'polite'); bubble.hidden = true;
+            avatar.append(bubble, createTradeAvatar(scene, player));
+            body.append(avatar, slots);
             const status = document.createElement('p'); status.className = 'trade-ready';
             status.textContent = player.ready ? '✓ ההצעה אושרה' : 'ממתין לאישור';
             status.classList.toggle('is-ready', player.ready);
             side.append(name, body, status); sides.append(side);
         }
         content.append(sides);
+        refreshBubbles();
         const toolbar = document.createElement('div'); toolbar.className = 'trade-toolbar';
         const label = document.createElement('label'); label.textContent = 'הפריטים שלכם ';
         const select = document.createElement('select'); select.setAttribute('aria-label', 'קטגוריית פריטים');
@@ -147,6 +201,7 @@ export function receiveTradeState(scene, state) {
         confirm.title = confirm.getAttribute('aria-label'); confirm.setAttribute('aria-pressed', String(own.ready));
         toolbar.append(label, confirm); content.append(toolbar);
         const inventory = document.createElement('div'); inventory.className = 'trade-inventory';
+        inventory.dataset.category = category;
         const slots = inventoryCategories.find(entry => entry.id === category)?.slots;
         const unlimited = state.unlimitedItems || scene.registry.get('inventory')?.unlimitedItems || scene.registry.get('auth')?.user?.isAdmin;
         const available = unlimited ? clothingItems.map(item => item.id) : state.available;
@@ -157,6 +212,7 @@ export function receiveTradeState(scene, state) {
         }
         if (!inventory.children.length) inventory.textContent = 'אין פריטים זמינים בקטגוריה זו להחלפה.';
         content.append(inventory);
+        inventory.scrollTop = inventoryScroll.get(category) || 0;
     }
     render();
 }

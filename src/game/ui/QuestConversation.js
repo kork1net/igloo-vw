@@ -36,6 +36,12 @@ export function openQuestConversation(resident, chainId) {
         overlay.querySelector('.quest-talk-title').textContent = chain.title;
         actions.replaceChildren(); feedback.textContent = '';
         objective.textContent = '';
+        if (chain.residentId !== resident.id) {
+            const names = { leo: 'ליאו בכיכר', rani: 'רני בחנות', mia: 'מיה בבית הקפה' };
+            story.textContent = `המשך המשימה מחכה אצל ${names[chain.residentId] || chain.residentId}.`;
+            button('close', () => close());
+            return;
+        }
         if (chain.completed) {
             story.textContent = personalize(chain.ending);
             button('close', () => close());
@@ -48,6 +54,13 @@ export function openQuestConversation(resident, chainId) {
             if (step.ready) button('claim', () => submit('quest:claim', step));
             else {
                 button('close', () => close());
+            }
+            if (scene.registry.get('auth')?.user?.isAdmin) {
+                const complete = document.createElement('button');
+                complete.type = 'button'; complete.className = 'quest-admin-complete';
+                complete.textContent = 'השלמה אוטומטית (מנהל)';
+                complete.addEventListener('click', () => submit('quest:adminComplete', step));
+                actions.append(complete);
             }
         }
     };

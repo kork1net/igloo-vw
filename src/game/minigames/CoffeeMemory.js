@@ -6,6 +6,7 @@ import { createMinigameBadge } from '../objects/MinigameBadge';
 import { addButtonHover } from '../ui/ButtonHover';
 import { setWorldDepth } from '../objects/WorldDepth';
 import { setPixelCounter } from '../ui/PixelCounter';
+import { addHoverOutline } from '../ui/HoverOutline';
 
 function fillCoffeeCup(element, choices, total) {
     if (!choices.length) { element.style.background = '#e9f5ff'; return; }
@@ -28,30 +29,32 @@ function fillCoffeeCup(element, choices, total) {
         : `linear-gradient(to top, ${stops.join(', ')})`;
 }
 
-export function createCoffeeGameEntry(scene) {
-    const container = scene.add.container(scene.scale.width - 260, 355);
+export function createCoffeeGameEntry(scene, position) {
+    const container = scene.add.container(position?.x ?? scene.scale.width - 260, position?.y ?? 355);
     const shadow = scene.add.ellipse(0, 2, 72, 15, 0x543b30, 0.25);
-    const cup = scene.add.graphics();
-    cup.fillStyle(0x543b30); cup.fillRect(-27, -53, 54, 48); cup.fillRect(22, -44, 17, 29);
-    cup.fillStyle(0xe7f3f5); cup.fillRect(-22, -49, 44, 38); cup.fillRect(27, -39, 7, 19);
-    cup.fillStyle(0x8f5c3c); cup.fillRect(-19, -47, 38, 9);
-    cup.fillStyle(0xa6d0e5); cup.fillRect(-18, -15, 36, 5);
-    cup.fillStyle(0xf3faff); cup.fillRect(-34, -4, 68, 5);
+    const cup = scene.add.image(0, 0, 'cafe-minigame-cup').setOrigin(0.5, 1);
+    cup.setScale(96 / cup.width);
     const label = scene.add.text(0, 20, 'ההזמנה של מיה', {
-        fontFamily: 'Rubik, Arial, sans-serif', fontSize: '18px', fontStyle: 'bold',
+        fontFamily: 'Rubik, Arial, sans-serif', fontSize: '22px', fontStyle: 'bold',
         color: '#543b30', stroke: '#fff6e7', strokeThickness: 3, resolution: 2
     }).setOrigin(0.5);
-    const hit = scene.add.rectangle(0, -25, 90, 72, 0xffffff, 0.001)
+    const hit = scene.add.rectangle(0, -25, 110, 90, 0xffffff, 0.001)
         .setInteractive({ useHandCursor: true });
     container.add([shadow, cup, label, hit]);
+    const outline = addHoverOutline(scene, cup);
+    for (const event of ['pointerover', 'pointerout']) {
+        hit.on(event, (...args) => cup.emit(event, ...args));
+    }
     const badge = createMinigameBadge(scene, container).setVisible(true); badge.y = -78;
     const float = scene.tweens.add({ targets: badge, y: -84, duration: 1100, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
     badge.once('destroy', () => float.stop());
-    addButtonHover(scene, hit, [cup]);
+    addButtonHover(scene, hit, [cup, outline]);
     hit.on('pointerdown', (pointer, x, y, event) => {
         event.stopPropagation(); scene.sound.play('wood-tap-ui'); openCoffeeMemory(scene);
     });
     setWorldDepth(container, container.y, scene.scale.height);
+    if (position?.depth !== undefined) container.setDepth(position.depth);
+    container.setScale(position?.scale ?? 1);
     return container;
 }
 

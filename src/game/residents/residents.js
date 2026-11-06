@@ -26,7 +26,7 @@ export const residents = [
         texture: 'resident:mia',
         image: 'assets/residents/mia.png',
         displayHeight: 148,
-        position: { x: 0.63, y: 0.4 },
+        position: { x: 0.29, y: 0.4 },
         greeting: 'ברוכים הבאים לבית הקפה! אני מיה, בעלת המקום. זה המקום שלי לקפה חם, למשהו מתוק ולשיחה טובה. תרגישו בבית!',
         questChainIds: [],
         speechLines: [

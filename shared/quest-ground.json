@@ -1,0 +1,6 @@
+{
+  "minSpawnDelay": 6000,
+  "maxSpawnDelay": 10000,
+  "maxVisiblePerStage": 3,
+  "pollInterval": 1000
+}

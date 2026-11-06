@@ -54,6 +54,9 @@ vm.runInNewContext(fs.readFileSync('server/index.cjs', 'utf8'), {
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
         : name === './coffee-game.cjs' ? require('../server/coffee-game.cjs')
+        : name === './resident-quests.cjs' ? require('../server/resident-quests.cjs')
+        : name === './quest-ground.cjs' ? require('../server/quest-ground.cjs')
+        : name === './quest-editor.cjs' ? require('../server/quest-editor.cjs')
         : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }

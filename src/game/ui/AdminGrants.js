@@ -77,7 +77,7 @@ export function mountModal(scene, overlay, dismiss, ownerKey = 'adminModal') {
         event.stopPropagation();
         if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
         if (event.key === 'Tab') {
-            const controls = [...overlay.querySelectorAll('button, input, select')]
+            const controls = [...overlay.querySelectorAll('button, input, select, textarea')]
                 .filter(element => !element.disabled && !element.closest('[hidden]'));
             const index = controls.indexOf(document.activeElement);
             if ((event.shiftKey && index <= 0) || (!event.shiftKey && index === controls.length - 1)) {

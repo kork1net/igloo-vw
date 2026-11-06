@@ -7,6 +7,7 @@ import { ClothingLayers, normalizeEquipment } from '../items/Clothing';
 import { io } from 'socket.io-client';
 import { SERVER_URL, saveToken } from './Auth';
 import { createAdminBadge } from '../objects/AdminBadge';
+import { playChatSound, silenceChatSound } from '../ui/ChatSound';
 import { createMinigameBadge } from '../objects/MinigameBadge';
 import { showPendingAdminGift } from '../ui/AdminGrants';
 import { receiveTradeState, closeTradeWindow } from '../ui/TradeWindow';
@@ -159,7 +160,7 @@ export default class Multiplayer {
         const text = message.trim().slice(0, 100);
         if (text && this.socket?.connected) {
             this.socket.emit('chatMessage', text);
-            this.scene.sound.play('ui-chat');
+            playChatSound(this.scene);
         }
     }
 
@@ -213,7 +214,7 @@ export default class Multiplayer {
     }
 
     connect() {
-        this.onVisibilityChange = () => this.syncVisibility();
+        this.onVisibilityChange = () => { silenceChatSound(this.scene.sound); this.syncVisibility(); };
         document.addEventListener('visibilitychange', this.onVisibilityChange);
         this.socket = io(SERVER_URL, {
             auth: (callback) => callback({
@@ -291,7 +292,7 @@ export default class Multiplayer {
         this.socket.on('chatMessage', (data) => {
             if (!data || typeof data.message !== 'string' || !data.message.trim()) return;
             this.remotePlayers.get(data.id)?.showMessage(data.message);
-            this.scene.sound.play('ui-chat');
+            playChatSound(this.scene);
         });
         this.socket.on('playerEmoji', data => {
             if (!data || typeof data.id !== 'string') return;

@@ -7,5 +7,8 @@
   { "id": "orange", "name": "כתום", "tint": "#ffa34d" },
   { "id": "purple", "name": "סגול", "tint": "#cbb1f2" },
   { "id": "gray", "name": "אפור", "tint": "#b9c6d3" },
-  { "id": "skin", "name": "צבע גוף", "tint": "#f1c5a5" }
+  { "id": "skin", "name": "צבע גוף", "tint": "#f1c5a5" },
+  { "id": "skin-tan", "name": "צבע גוף שזוף", "tint": "#cf9a70" },
+  { "id": "skin-dark", "name": "צבע גוף כהה", "tint": "#87583f" },
+  { "id": "skin-light", "name": "צבע גוף בהיר", "tint": "#ffdfc7" }
 ]

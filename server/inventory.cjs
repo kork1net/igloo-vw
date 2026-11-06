@@ -11,6 +11,7 @@ const { coffeeRewards } = require('./coffee-game.cjs');
 const { rankForPoints } = require('./ranks.cjs');
 const rooms = require('../shared/rooms.json');
 const { chain, questView, activeQuestStep } = require('./quests.cjs');
+const residentQuests = require('./resident-quests.cjs');
 
 class InventoryError extends Error {}
 
@@ -124,7 +125,18 @@ class Inventories {
             unlimitedItems: user.isAdmin === true, maxItemQuantity, equipped, currency: profile.currency, revision: profile.revision || 0,
             rankingPoints, ...rankForPoints(rankingPoints, user.isAdmin), snowBest: profile.snowBest || 0,
             adminGifts: (profile.adminGrants || []).filter(gift => !gift.acknowledged),
-            quests: { [chain.id]: questView(profile, user, catalog, equipped) } };
+            secrets: { cafePictureCup: Boolean(profile.secrets?.['cafe-picture-cup']) },
+            quests: { [chain.id]: questView(profile, user, catalog, equipped), ...residentQuests.views(profile, user) } };
+    }
+
+    claimCafeSecret(user, catalog) {
+        const itemId = 'hands/coffee-cup', key = 'cafe-picture-cup';
+        const profile = this.load(user);
+        if (profile.secrets?.[key]) return { claimed: false, itemId };
+        if (!catalog.items.some(item => item.id === itemId)) throw new InventoryError('פריט הפרס אינו זמין כרגע.');
+        this.persist(user, { ...profile, ...(!user.isAdmin ? this.addItem(profile, itemId) : {}),
+            secrets: { ...profile.secrets, [key]: true }, revision: (profile.revision || 0) + 1 });
+        return { claimed: true, itemId };
     }
 
     rememberRoom(user, room) {
@@ -163,12 +175,13 @@ class Inventories {
         const previousPurchases = profile.purchasedItems || profile.items.filter(id => id !== (user.starterColor || WHITE));
         this.persist(user, { ...profile, ...this.addItem(profile, itemId),
             purchasedItems: [...new Set([...previousPurchases, itemId])],
+            quests: residentQuests.advance(profile, 'purchaseNew', 1, residentQuests.capture(profile)),
             currency: inventory.currency - offer.price, revision: inventory.revision + 1 });
         return this.snapshot(user, catalog);
     }
 
     acceptQuest(user, chainId, catalog) {
-        if (chainId !== chain.id) throw new InventoryError('שרשרת משימות לא קיימת.');
+        if (chainId !== chain.id) return this.residentQuestAction(user, chainId, catalog);
         const profile = this.load(user);
         if (profile.quests?.[chain.id]?.started) return this.snapshot(user, catalog);
         this.persist(user, { ...profile, quests: { ...profile.quests,
@@ -176,12 +189,14 @@ class Inventories {
         return this.snapshot(user, catalog);
     }
 
-    claimQuest(user, chainId, stepId, catalog) {
+    claimQuest(user, chainId, stepId, catalog, adminComplete = false) {
+        if (adminComplete && user.isAdmin !== true) throw new InventoryError('האפשרות זמינה למנהלים בלבד.');
+        if (chainId !== chain.id) return this.residentQuestAction(user, chainId, catalog, stepId, adminComplete);
         if (chainId !== chain.id) throw new InventoryError('שרשרת משימות לא קיימת.');
         const inventory = this.snapshot(user, catalog);
         const view = inventory.quests[chain.id];
         const step = view.steps[view.claimedSteps];
-        if (!view.started || !step || step.id !== stepId || !step.ready) {
+        if (!view.started || !step || step.id !== stepId || (!step.ready && !adminComplete)) {
             throw new InventoryError('יש להשלים את המשימה הנוכחית לפני קבלת הפרס.');
         }
         if (step.itemReward && !catalog.items.some(item => item.id === step.itemReward)) {
@@ -195,6 +210,48 @@ class Inventories {
             quests: { ...profile.quests, [chain.id]: { ...profile.quests?.[chain.id], started: true, claimed: view.claimedSteps + 1,
                 claimedIds: [...view.claimedIds, step.id], completed: view.claimedSteps + 1 === chain.steps.length } },
             revision: inventory.revision + 1 });
+        return this.snapshot(user, catalog);
+    }
+
+    residentQuestAction(user, chainId, catalog, stepId, adminComplete = false) {
+        if (adminComplete && user.isAdmin !== true) throw new InventoryError('האפשרות זמינה למנהלים בלבד.');
+        const definition = residentQuests.chains.find(entry => entry.id === chainId);
+        const profile = this.load(user);
+        const view = residentQuests.views(profile, user)[chainId];
+        if (!definition || !view) throw new InventoryError('המשימה עדיין אינה זמינה בדרגה שלכם.');
+        if (stepId === undefined) {
+            if (view.started) return this.snapshot(user, catalog);
+            this.persist(user, { ...profile, quests: { ...profile.quests,
+                [chainId]: { started: true, claimed: 0, claimedIds: [], progress: {} } }, revision: (profile.revision || 0) + 1 });
+        } else {
+            const step = view.steps[view.claimedSteps];
+            if (!view.started || !step || step.id !== stepId || (!step.ready && !adminComplete)) throw new InventoryError('יש להשלים את הבקשה הנוכחית תחילה.');
+            if (step.itemReward && !catalog.items.some(item => item.id === step.itemReward)) {
+                throw new InventoryError('פריט הפרס אינו זמין כרגע. נסו שוב מאוחר יותר.');
+            }
+            this.persist(user, { ...profile, currency: profile.currency + step.coins,
+                rankingPoints: (profile.rankingPoints || 0) + step.rankingPoints,
+                ...(step.itemReward && !user.isAdmin ? this.addItem(profile, step.itemReward) : {}),
+                quests: { ...profile.quests, [chainId]: { ...profile.quests[chainId], claimed: view.claimedSteps + 1,
+                    claimedIds: [...view.claimedIds, step.id] } },
+                revision: (profile.revision || 0) + 1 });
+        }
+        return this.snapshot(user, catalog);
+    }
+
+    questStages(user) {
+        const profile = this.load(user);
+        const step = activeQuestStep(profile);
+        return { ...residentQuests.capture(profile), ...(step ? { [chain.id]: step.id } : {}) };
+    }
+
+    collectQuestItem(user, chainId, stepId, catalog) {
+        const profile = this.load(user);
+        const definition = residentQuests.chains.find(entry => entry.id === chainId);
+        const step = definition && residentQuests.currentStage(profile, definition);
+        if (!step || step.id !== stepId || step.rule !== 'collect') throw new InventoryError('האיסוף אינו פעיל.');
+        const quests = residentQuests.advance(profile, 'collect', 1, { [chainId]: stepId });
+        this.persist(user, { ...profile, quests, revision: (profile.revision || 0) + 1 });
         return this.snapshot(user, catalog);
     }
 
@@ -220,7 +277,8 @@ class Inventories {
             totalRankingPoints: rankingPoints, ...rankForPoints(rankingPoints, user.isAdmin),
             best: Math.max(profile.snowBest || 0, round.score) };
         this.persist(user, { ...profile, currency: profile.currency + earned.coins,
-            rankingPoints, snowBest: result.best, lastSnowRound: result, quests,
+            rankingPoints, snowBest: result.best, lastSnowRound: result,
+            quests: residentQuests.advance({ ...profile, quests }, 'snowTotal', round.score, round.questStages),
             revision: (profile.revision || 0) + 1 });
         return result;
     }
@@ -232,8 +290,17 @@ class Inventories {
         const earned = coffeeRewards(round.score, round.orders);
         const rankingPoints = (profile.rankingPoints || 0) + earned.rankingPoints;
         const result = { id: round.id, score: round.score, orders: round.orders, ...earned };
+        const step = activeQuestStep(profile);
+        let quests = profile.quests;
+        if (step?.rule === 'coffee' && round.questStages?.[chain.id] === step.id) {
+            const progress = profile.quests[chain.id];
+            quests = { ...quests, [chain.id]: { ...progress, coffeeScores: {
+                ...progress.coffeeScores, [step.id]: Math.max(progress.coffeeScores?.[step.id] || 0, round.score)
+            } } };
+        }
         this.persist(user, { ...profile, currency: profile.currency + earned.coins,
-            rankingPoints, lastCoffeeRound: result, revision: (profile.revision || 0) + 1 });
+            rankingPoints, lastCoffeeRound: result,
+            quests: residentQuests.advance({ ...profile, quests }, 'coffeeOrders', round.orders, round.questStages), revision: (profile.revision || 0) + 1 });
         return result;
     }
 

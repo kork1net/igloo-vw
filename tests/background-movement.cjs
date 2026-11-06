@@ -17,6 +17,9 @@ vm.runInNewContext(fs.readFileSync('server/index.cjs', 'utf8'), {
         : name === '../shared/square.json' ? require('../shared/square.json')
         : name === './snow-game.cjs' ? require('../server/snow-game.cjs')
         : name === './coffee-game.cjs' ? require('../server/coffee-game.cjs')
+        : name === './resident-quests.cjs' ? require('../server/resident-quests.cjs')
+        : name === './quest-ground.cjs' ? require('../server/quest-ground.cjs')
+        : name === './quest-editor.cjs' ? require('../server/quest-editor.cjs')
         : name === './trades.cjs' ? require('../server/trades.cjs')
         : name === './inventory.cjs' ? require('./helpers/inventory-memory.cjs')
         : name === './rarities.cjs' ? { Rarities: class { snapshot() { return {}; } } }
@@ -107,9 +110,10 @@ assert.ok(Math.abs(lastState().y - 240) < 0.001);
 handlers.disconnect();
 assert.equal(timerCleared, true);
 
-// Interior Shop uses the same wall for live packets, initial spawn and hidden tabs.
-socket.id = 'shop-walker';
-socket.handshake.auth = { room: 'Shop', player: { x: 640, y: 65 } };
+// Both interiors share the same artwork and wall boundary.
+for (const room of ['Shop', 'Cafe']) {
+socket.id = room + '-walker';
+socket.handshake.auth = { room, player: { x: 640, y: 65 } };
 connect(socket);
 const { getShopInteriorColliders } = require('../shared/collision.js');
 const interiorMinimumY = getShopInteriorColliders()[0].bottom + 4 - 24;
@@ -130,8 +134,9 @@ assert.equal(lastState().isMoving, false);
 handlers.playerBackground({ hidden: false }, value => { resumed = value; });
 assert.ok(resumed.y >= interiorMinimumY);
 handlers.disconnect();
+}
 console.log('PASS: background walk/run, arrival, resume, stale updates, released keys, cleanup');
-console.log('PASS: shop interior spawn, foreground movement and background running cannot enter the wall');
+console.log('PASS: shop and cafe spawn, foreground movement and background running cannot enter the wall');
 
 socket.id = 'sky-walker';
 socket.handshake.auth = { room: 'Game', player: { x: 1145, y: 25 } };

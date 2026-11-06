@@ -26,7 +26,9 @@ export function addHoverOutline(scene, sprite) {
     const outline = scene.add.image(sprite.x, sprite.y, key)
         .setOrigin((radius + sprite.originX * width) / (width + radius * 2),
             (radius + sprite.originY * height) / (height + radius * 2))
-        .setScale(sprite.scaleX, sprite.scaleY).setDepth(sprite.depth).setAlpha(0);
+        .setScale(sprite.scaleX, sprite.scaleY)
+        .setFlipX(sprite.flipX).setFlipY(sprite.flipY)
+        .setDepth(sprite.depth).setAlpha(0);
     if (sprite.parentContainer) {
         sprite.parentContainer.addAt(outline, sprite.parentContainer.getIndex(sprite));
     }

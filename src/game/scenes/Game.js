@@ -76,6 +76,21 @@ export class Game extends BaseRoom {
         setWorldDepth(this.cafeBuilding, this.cafeDepthLine, height);
         setWorldDepth(this.cafeEntrance, this.cafeDepthLine, height);
         this.cafeDoorOutline = addHoverOutline(this, this.cafeEntrance);
+        // Prioritize clicks on visible door pixels over avatars without raising the artwork.
+        const cafeDoor = this.cafeEntrance;
+        this.cafeEntranceHitArea = this.add.zone(cafeDoor.x, cafeDoor.y, cafeDoor.width, cafeDoor.height)
+            .setOrigin(cafeDoor.originX, cafeDoor.originY).setScale(cafeDoor.scaleX, cafeDoor.scaleY)
+            .setDepth(20).setInteractive({
+                hitArea: cafeDoor.input.hitArea,
+                hitAreaCallback: (area, x, y) => cafeDoor.input.hitAreaCallback(area, x, y, cafeDoor),
+                useHandCursor: true
+            });
+        for (const eventName of ['pointerover', 'pointerout', 'pointerdown']) {
+            this.cafeEntranceHitArea.on(eventName, (...args) => {
+                if (eventName === 'pointerdown') args[3]?.stopPropagation();
+                cafeDoor.emit(eventName, ...args);
+            });
+        }
         this.cafeEntrancePoint = {
             x: this.cafeBuilding.x + (square.cafe.doorCenter - this.cafeBuilding.width / 2) * square.cafe.scale,
             y: this.cafeBuilding.y + (square.cafe.doorBottom - this.cafeBuilding.height) * square.cafe.scale + 12

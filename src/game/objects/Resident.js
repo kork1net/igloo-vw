@@ -1,5 +1,6 @@
 import { addHoverOutline } from '../ui/HoverOutline';
 import { renderResidentQuests } from '../ui/ResidentQuests';
+import { openQuestEditor } from '../ui/QuestEditor';
 import { showChatMessage, clearChatMessage } from './ChatBubble';
 import { openHtmlWindow, closeHtmlWindow, closeWindow } from '../ui/WindowTransition';
 
@@ -115,6 +116,13 @@ export class Resident {
         overlay.querySelector('h2').textContent = this.definition.name;
         if (this.definition.role) overlay.querySelector('.resident-label').textContent = this.definition.role;
         overlay.querySelector('.resident-greeting').textContent = this.definition.greeting;
+        if (scene.registry.get('auth')?.user?.isAdmin) {
+            const manage = document.createElement('button');
+            manage.type = 'button'; manage.className = 'quest-admin-complete';
+            manage.textContent = 'ניהול שרשראות המשימות';
+            manage.addEventListener('click', () => { scene.sound.play('wood-tap-ui'); openQuestEditor(this); });
+            overlay.querySelector('.resident-quests').prepend(manage);
+        }
         const close = () => {
             if (overlay.windowClosing) return;
             scene.sound.play('ui-close');
@@ -150,7 +158,7 @@ export class Resident {
 
     refreshQuestMarker() {
         const quests = this.scene.registry.get('inventory')?.quests || {};
-        const ready = (this.definition.questChainIds || []).some(id => quests[id]?.steps.some(step => step.ready));
+        const ready = Object.values(quests).some(chain => chain.residentId === this.id && chain.steps.some(step => step.ready));
         if (ready && !this.questReadyBadge?.visible) clearChatMessage(this);
         this.questReadyBadge?.setVisible(ready);
     }
